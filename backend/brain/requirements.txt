@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+requests
+pydantic
+# For embeddings, we'll use a simple library or just placeholders for now
+sentence-transformers
+numpy
+ollama

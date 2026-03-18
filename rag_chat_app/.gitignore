@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Virtual environments
+venv/
+env/
+.env/
+.venv/
+
+# Environment variables
+.env
+.env.*
+
+# Application Data & Databases
+app_data.db
+app_data.db-*
+*.db
+*.sqlite
+*.sqlite3
+
+# Streamlit/App cache
+.streamlit/
+.cache/
+
+# Logs
+*.log
+logs/
+
+# IDEs / Editors
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+*~
