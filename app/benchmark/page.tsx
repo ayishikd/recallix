@@ -19,8 +19,11 @@ import {
   Microchip,
   Dna,
   Infinity,
-  CheckCircle2
+  CheckCircle2,
+  Brain
 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { 
   LineChart, 
   Line, 
@@ -100,19 +103,31 @@ export default function BenchmarkPage() {
         <div className="absolute bottom-1/4 right-0 w-[400px] h-[400px] bg-purple-600/5 blur-[120px] rounded-full" />
       </div>
 
-      <main className="relative max-w-7xl mx-auto px-6 py-24 flex flex-col gap-32">
+      {/* Nav */}
+      <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-white/5 flex items-center justify-between px-8 glass backdrop-blur-2xl">
+        <div className="flex items-center gap-3 cursor-pointer">
+          <Link href="/" className="flex items-center gap-3">
+            <Brain className="w-6 h-6 text-cyan-400" />
+            <span className="text-xl font-black tracking-tighter">RECALLIX</span>
+          </Link>
+        </div>
+        <div className="hidden md:flex items-center gap-6">
+          <Link href="/architecture" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Architecture</Link>
+          <Link href="/benchmark" className="text-sm font-bold text-white transition-colors">Performance Audit</Link>
+          <Link href="/roadmap" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Roadmap</Link>
+          <Link href="/observability" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Observability</Link>
+        </div>
+      </nav>
+
+      <main className="relative max-w-7xl mx-auto px-6 py-32 flex flex-col gap-32">
         
         <header className="flex flex-col gap-8">
-          <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center font-black italic shadow-xl shadow-blue-600/20">R</div>
-            <span className="font-black tracking-tighter text-2xl">Recallix</span>
-          </div>
           <div className="max-w-3xl flex flex-col gap-4">
             <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-[0.85] bg-gradient-to-b from-white to-white/40 bg-clip-text text-transparent">
               Cognitive Audit.
             </h1>
             <p className="text-xl text-white/40 leading-relaxed max-w-2xl">
-              Measured performance audit for the Recallix MemoryOS. Sub-millisecond retrieval at 1,000,000 nodes. 
+              Measured performance audit for the Recallix MemoryOS. 1.28ms retrieval at 1,000,000 nodes. 
               Verified on Apple M4 Core Infrastructure.
             </p>
           </div>
@@ -216,27 +231,27 @@ export default function BenchmarkPage() {
 
         {/* TEST 3: MULTI-AGENT HANDOVER */}
         <section className="relative">
-          <TestHeader number={3} title="Agent Interoperability" icon={Users} color="bg-purple-600" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-6">
-              <h3 className="text-xl font-bold">The Cross-Model Test</h3>
-              <p className="text-white/60 leading-relaxed">
-                Knowledge was stored using Llama 3.1 8B. 
-                Retrieval was performed using Mistral 7B.
-              </p>
+          <TestHeader number={3} title="Universal Substrate" icon={Users} color="bg-purple-600" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-6">
+            <h3 className="text-xl font-bold">Model Interoperability</h3>
+            <p className="text-white/60 leading-relaxed">
+              We verified the "Shared Intelligence" moat by storing complex context via one model 
+              architecture and retrieving it with a completely different LLM.
+            </p>
               <div className="flex items-center gap-4 mt-4">
-                <div className="flex-1 h-14 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 font-bold">Llama 3.1</div>
+                <div className="flex-1 h-14 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 font-bold">Model A</div>
                 <ArrowRight className="text-white/20" />
-                <div className="flex-1 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 font-bold">Mistral 7B</div>
+                <div className="flex-1 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 font-bold">Model B</div>
               </div>
             </div>
             <div className="bg-purple-600/10 border border-purple-600/20 rounded-[2.5rem] p-10 flex flex-col justify-center gap-4">
-              <span className="text-4xl font-black text-white">100% Fidelity</span>
-              <p className="text-sm text-white/70 leading-relaxed">
-                Confirmed that Recallix standardizes memory across disparate model architectures 
-                with zero semantic loss during handover.
-              </p>
-            </div>
+            <span className="text-4xl font-black text-white">100% Fidelity</span>
+            <p className="text-sm text-white/70 leading-relaxed">
+              Recallix standardizes memory across disparate architectures, allowing 
+              collective AI intelligence without semantic loss.
+            </p>
+          </div>
           </div>
         </section>
 

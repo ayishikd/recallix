@@ -72,12 +72,6 @@ python3 -m venv venv
 ./venv/bin/python server.py
 ```
 
-### 3. Launch the Dashboard
-```bash
-npm install
-npm run dev
-```
-
 ---
 
 ## 📜 License

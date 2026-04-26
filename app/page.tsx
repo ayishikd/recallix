@@ -7,7 +7,7 @@ import {
   Code2, Activity, ArrowRight, Layers, Sparkles,
   Shield, TrendingUp, Target, AlertTriangle, Play,
   Workflow, Eye, ChevronRight, CheckCircle2, Zap,
-  ShieldCheck, Users, History
+  ShieldCheck, Users, History, Github
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -317,13 +317,13 @@ function ProblemSolutionDemo() {
                 ))}
                 {phase === "done" && (
                   <motion.div initial={{ opacity: 0, y: 8, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} className="mt-8 p-4 rounded-2xl bg-cyan-500/5 border border-cyan-500/10 text-center">
-                    <p className="text-sm font-black text-cyan-400">✅ Perfect Recall</p>
-                    <p className="text-[10px] font-bold text-cyan-500/60 mt-1">3 memories stored · Knowledge graph updated · 1.28ms recall</p>
+                    <p className="text-sm font-black text-cyan-400">✅ Neural-Heuristic Recall</p>
+                    <p className="text-[10px] font-bold text-cyan-500/60 mt-1">Stored across 6 layers · Hybrid Reranked · 1.28ms recall</p>
                     <div className="flex items-center justify-center gap-5 mt-3">
-                      <span className="text-[9px] font-black text-zinc-600">🧠 6 layers</span>
-                      <span className="text-[9px] font-black text-zinc-600">📊 ranked</span>
-                      <span className="text-[9px] font-black text-zinc-600">⚡ 1.28ms</span>
-                      <span className="text-[9px] font-black text-zinc-600">🔗 graph</span>
+                      <span className="text-[9px] font-black text-zinc-600">🧠 9 stages</span>
+                      <span className="text-[9px] font-black text-zinc-600">📊 HNSW</span>
+                      <span className="text-[9px] font-black text-zinc-600">⚡ NEON SIMD</span>
+                      <span className="text-[9px] font-black text-zinc-600">🔗 SQLite WAL</span>
                     </div>
                   </motion.div>
                 )}
@@ -337,12 +337,12 @@ function ProblemSolutionDemo() {
 }
 
 const features = [
-  { icon: Database, title: "Long-Term Memory", desc: "6-layer cognitive architecture stores, ranks, and retrieves memories across sessions.", color: "cyan" },
-  { icon: Search, title: "Semantic Recall", desc: "Two-stage retrieval with C++ vector search and neural reranking for precise context.", color: "blue" },
-  { icon: Clock, title: "Timeline Reasoning", desc: "Chronological event engine detects patterns and tracks behavioral evolution.", color: "purple" },
-  { icon: Lightbulb, title: "Reflection Insights", desc: "LLM-powered reflections extract high-level behavioral patterns from raw memory.", color: "amber" },
-  { icon: Sparkles, title: "Meta-Memory", desc: "Self-optimizing layer evolves schemas, adjusts policies, and reorganizes knowledge.", color: "emerald" },
-  { icon: Code2, title: "Developer SDK", desc: "Python and TypeScript SDKs — give agents persistent memory in one line of code.", color: "rose" },
+  { icon: Database, title: "Shared Substrate", desc: "A unified memory layer accessible by any agent architecture, bridging the gap between Llama, Mistral, and GPT ecosystems.", color: "cyan" },
+  { icon: Search, title: "Model Interoperability", desc: "Zero-loss context handover. Store with a reasoning model, retrieve with a coding assistant, or scale across thousands of specialized agents.", color: "blue" },
+  { icon: Clock, title: "Universal Continuity", desc: "True cross-session persistence. Your agents maintain a permanent cognitive history that evolves as your user does.", color: "purple" },
+  { icon: Lightbulb, title: "Reflection Insights", desc: "Background LLM threads extract behavioral patterns and high-level insights from raw episodic logs.", color: "amber" },
+  { icon: Sparkles, title: "Meta-Memory", desc: "Self-optimizing retrieval policies and schema evolution that adapts to user-specific interaction patterns.", color: "emerald" },
+  { icon: ShieldCheck, title: "Hardware Moat", desc: "C++ HNSW engines with NEON SIMD acceleration. Millisecond search at 1,000,000 nodes, verified on M4 hardware.", color: "rose" },
   { icon: Activity, title: "Observability", desc: "Full system metrics: memory growth, recall latency, cluster health, schema evolution.", color: "orange" },
   { icon: Shield, title: "Local-First", desc: "No cloud dependencies. All models run locally via Ollama. Data never leaves your machine.", color: "teal" },
 ];
@@ -432,8 +432,8 @@ const lifecycleDetailed = [
   { step: "Episodic Storage", label: "Stored as timeline event", detail: "Persisted to SQLite (WAL mode) with importance scoring, reinforcement tracking, and keyword indexing.", icon: <Database className="w-5 h-5" />, system: "Python", color: "from-purple-500 to-violet-500" },
   { step: "Semantic Embedding", label: "Embedded in 128D vector space", detail: "128-dimensional vector generated and sent to C++ VectorEngine for cosine similarity indexing.", icon: <Cpu className="w-5 h-5" />, system: "C++", color: "from-orange-500 to-amber-500" },
   { step: "Long-Term Gate", label: "High-importance promoted", detail: "Memories scoring >8.0 importance are promoted to long-term storage with Ebbinghaus decay protection.", icon: <Shield className="w-5 h-5" />, system: "Python", color: "from-emerald-500 to-teal-500" },
-  { step: "Reflection", label: "LLM generates insights", detail: "Llama 3.1:8B via Ollama analyzes memory patterns and generates high-level behavioral reflections.", icon: <Lightbulb className="w-5 h-5" />, system: "Ollama", color: "from-amber-500 to-yellow-500" },
-  { step: "Meta-Memory", label: "System self-optimizes", detail: "Meta-analyzer evolves schemas, optimizes retrieval policies, and tunes attention weights autonomously.", icon: <Sparkles className="w-5 h-5" />, system: "Python", color: "from-rose-500 to-pink-500" },
+  { step: "Reflection", label: "LLM generates insights", detail: "Background threads via diverse LLM architectures analyze memory patterns and generate high-level behavioral reflections.", icon: <Lightbulb className="w-5 h-5" />, system: "Ollama", color: "from-amber-500 to-yellow-500" },
+  { step: "Meta-Memory", label: "System self-optimizes", detail: "Meta-analyzer evolves schemas, optimizes retrieval policies, and tunes attention weights autonomously for cross-model continuity.", icon: <Sparkles className="w-5 h-5" />, system: "Python", color: "from-rose-500 to-pink-500" },
 ];
 
 function MemoryLifecycleSection() {
@@ -569,17 +569,11 @@ export default function HomePage() {
           <span className="text-xl font-black tracking-tighter">RECALLIX</span>
         </div>
         <div className="hidden md:flex items-center gap-6">
-          <Link href="/playground" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Live Demo</Link>
           <Link href="/architecture" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Architecture</Link>
-          <Link href="/flow-control" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Flow Control</Link>
-          <Link href="/sdk" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">SDK</Link>
+          <Link href="/benchmark" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Performance Audit</Link>
+          <Link href="/roadmap" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Roadmap</Link>
           <Link href="/observability" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Observability</Link>
         </div>
-        <Link href="/playground">
-          <Button className="h-10 px-5 bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-full">
-            Try Demo
-          </Button>
-        </Link>
       </nav>
 
       <section className="relative pt-40 pb-24 px-6 text-center">
@@ -591,32 +585,32 @@ export default function HomePage() {
         </AnimatedSection>
         <AnimatedSection delay={0.1}>
           <h1 className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tighter max-w-5xl mx-auto leading-[0.9] mb-8">
-            Persistent Memory{" "}
-            <span className="text-gradient">Infrastructure</span>{" "}
-            for AI Agents
+            Universal Memory{" "}
+            <span className="text-gradient">Substrate</span>{" "}
+            for Multi-Agent Systems
           </h1>
         </AnimatedSection>
         <AnimatedSection delay={0.2}>
-          <p className="text-xl md:text-2xl text-zinc-500 font-bold max-w-2xl mx-auto mb-12 leading-relaxed">
-            Measured performance audit for the Recallix MemoryOS. 1.28ms retrieval at 1,000,000 nodes. 
-            Verified on Apple M4 Core Infrastructure.
+          <p className="text-xl md:text-2xl text-zinc-500 font-bold max-w-3xl mx-auto mb-12 leading-relaxed">
+            One unified cognitive layer shared across every AI model and every session. 
+            Give your agents a collective memory that never decays, regardless of their architecture.
           </p>
         </AnimatedSection>
-        <AnimatedSection delay={0.3}>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Link href="/playground">
-              <Button className="h-14 px-8 bg-white text-black font-black text-lg rounded-2xl hover:bg-zinc-200">
-                Try Live Demo <ArrowRight className="ml-2 w-5 h-5" />
-              </Button>
-            </Link>
+        <AnimatedSection delay={0.3} className="relative z-10">
+          <div className="flex flex-wrap gap-4 justify-center relative z-10">
             <Link href="/architecture">
-              <Button variant="outline" className="h-14 px-8 border-white/10 text-white font-black text-lg rounded-2xl hover:bg-white/5">
-                View Architecture
+              <Button className="h-14 px-8 bg-white text-black font-black text-lg rounded-2xl hover:bg-zinc-200">
+                View Architecture <ArrowRight className="ml-2 w-5 h-5" />
               </Button>
             </Link>
-            <Link href="/sdk">
+            <Link href="/benchmark">
               <Button variant="outline" className="h-14 px-8 border-white/10 text-white font-black text-lg rounded-2xl hover:bg-white/5">
-                Explore SDK
+                View Performance Audit
+              </Button>
+            </Link>
+            <Link href="https://github.com/AyishikD/Recallix">
+              <Button variant="outline" className="h-14 px-8 border-white/10 text-white font-black text-lg rounded-2xl hover:bg-white/5 gap-2">
+                <Github className="w-5 h-5" /> Star on GitHub
               </Button>
             </Link>
           </div>
@@ -830,10 +824,10 @@ export default function HomePage() {
 
           <AnimatedSection className="relative z-10">
             <Badge className="mb-8 py-2 px-4 bg-purple-500/10 border-purple-500/20 text-purple-400 rounded-full font-bold">
-              FOR INVESTORS
+              THE MULTI-AGENT MOAT
             </Badge>
             <h2 className="text-4xl md:text-5xl font-black tracking-tighter mb-16">
-              The Missing Layer in AI
+              Bridges the Memory Gap
             </h2>
           </AnimatedSection>
 
@@ -854,8 +848,8 @@ export default function HomePage() {
                 <h3 className="text-xl font-black">Solution</h3>
               </div>
               <p className="text-zinc-400 font-bold leading-relaxed">
-                Recallix is a plug-and-play cognitive memory engine. Six-layer architecture with
-                neural ranking, RL-based forgetting, and self-evolving schemas.
+                Recallix is a plug-and-play cognitive memory engine. A universal interop substrate with
+                HNSW indexing, hardware-accelerated search, and self-evolving schemas for any AI.
               </p>
             </AnimatedSection>
             <AnimatedSection delay={0.3}>
@@ -864,8 +858,8 @@ export default function HomePage() {
                 <h3 className="text-xl font-black">Market</h3>
               </div>
               <p className="text-zinc-400 font-bold leading-relaxed">
-                Every AI assistant, copilot, and autonomous agent needs persistent memory.
-                Recallix becomes the memory standard for agent frameworks.
+                Shared memory is the missing link for agent frameworks.
+                Recallix becomes the standard substrate for collective AI intelligence.
               </p>
             </AnimatedSection>
           </div>
@@ -904,7 +898,7 @@ export default function HomePage() {
                 <h3 className="text-xl font-black">C++ Infrastructure</h3>
               </div>
               <div className="space-y-3">
-                {["Vector Engine (Cosine)", "Graph Engine (Adjacency)", "Timeline Engine", "Clustering Engine", "Memory Indexer", "Event Queue"].map((item) => (
+                {["HNSW Indexing (Hierarchical)", "NEON SIMD Parallelism", "SQLite WAL Concurrency", "Atomic Timeline Indexing", "Hardware-Aware Cosine Similarity", "Zero-Copy Event Buffering"].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm font-bold text-zinc-400">
                     <div className="w-1.5 h-1.5 rounded-full bg-purple-500" />
                     {item}
@@ -930,15 +924,20 @@ export default function HomePage() {
             Give your agents a{" "}
             <span className="text-gradient">memory they deserve.</span>
           </h2>
-          <div className="flex flex-wrap gap-4 justify-center">
-            <Link href="/playground">
+          <div className="flex flex-wrap gap-4 justify-center relative z-10">
+            <Link href="/architecture">
               <Button className="h-14 px-10 bg-cyan-500 hover:bg-cyan-400 text-black font-black text-lg rounded-2xl">
-                Try the Live Demo
+                View Architecture
               </Button>
             </Link>
-            <Link href="/sdk">
+            <Link href="/benchmark">
               <Button variant="outline" className="h-14 px-10 border-white/10 font-black text-lg rounded-2xl hover:bg-white/5">
-                Read the Docs
+                View Performance Audit
+              </Button>
+            </Link>
+            <Link href="https://github.com/AyishikD/Recallix">
+              <Button variant="outline" className="h-14 px-10 border-white/10 font-black text-lg rounded-2xl hover:bg-white/5 gap-2">
+                <Github className="w-5 h-5" /> GitHub
               </Button>
             </Link>
           </div>
@@ -950,7 +949,12 @@ export default function HomePage() {
           <Brain className="w-4 h-4 text-zinc-600" />
           <span className="text-xs font-bold text-zinc-600">RECALLIX</span>
         </div>
-        <span className="text-xs text-zinc-700">Persistent Memory Infrastructure for AI Agents</span>
+        <div className="flex items-center gap-6">
+          <Link href="https://github.com/AyishikD/Recallix" className="text-xs font-bold text-zinc-600 hover:text-white transition-colors">
+            GitHub
+          </Link>
+          <span className="text-xs text-zinc-700">Persistent Memory Infrastructure for AI Agents</span>
+        </div>
       </footer>
     </div>
   );
