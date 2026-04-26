@@ -33,7 +33,7 @@ ollama pull mistral:latest
 ollama pull mxbai-embed-large
 ```
 > [!NOTE]
-> These are the audited defaults. If you wish to use different models, update the environment variables or `backend/brain/models/model_router.py`.
+> These are the audited defaults. If you wish to use different models, update the `backend/brain/models/model_router.py`.
 
 ### 3. Quickstart (Reproduction)
 
