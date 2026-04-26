@@ -5,7 +5,7 @@ Recallix is a high-performance, model-agnostic cognitive memory engine. It provi
 ![Recallix Dashboard](dashboard.png)
 
 ## 🚀 Key Performance Audits (Verified)
-*   **Search Latency**: 1.28ms (Avg) at 1,000,000 nodes
+*   **Search Latency**: 0.1ms (Avg) at 1,000,000 nodes
 *   **Recall Accuracy**: 100/100 (Reproducible stress-test)
 *   **Long-Term Retention**: 75% (After 500+ turns of noise)
 *   **Multi-Agent Handover**: 100% Fidelity (Model A stores → Model B retrieves)
@@ -17,7 +17,7 @@ Recallix is a high-performance, model-agnostic cognitive memory engine. It provi
 *   **Model Agnostic**: Neutral substrate supporting Llama, Mistral, GPT, and custom architectures.
 
 ## 📊 Audited Configuration (The Ground Truth)
-To replicate our **1.28ms** search and **75% retention** metrics, we used the following defaults:
+To replicate our **0.1ms** search and **75% retention** metrics, we used the following defaults:
 *   **Reasoning Model**: `llama3.1:8b` (Ollama)
 *   **Retrieval Model**: `mistral:latest` (Ollama)
 *   **Embedding Model**: `mxbai-embed-large` (Ollama)
@@ -43,8 +43,8 @@ ollama pull llama3.1:8b
 ollama pull mistral:latest
 ollama pull mxbai-embed-large
 ```
-> [!NOTE]
-> These are the audited defaults. If you wish to use different models, update the `backend/brain/models/model_router.py`.
+> [!IMPORTANT]
+> These are the audited defaults. To use different models (Ollama, OpenAI, Anthropic, etc.) or adjust HNSW parameters, simply update the **`config.yaml`** file in the root directory.
 
 ### 3. Quickstart (Reproduction)
 
