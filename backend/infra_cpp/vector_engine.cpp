@@ -8,6 +8,12 @@ void VectorEngine::addVector(const std::string &id,
   store_.push_back({data, id});
 }
 
+void VectorEngine::bulkAdd(const std::vector<std::pair<std::string, std::vector<float>>> &vectors) {
+    for (const auto& v : vectors) {
+        store_.push_back({v.second, v.first});
+    }
+}
+
 void VectorEngine::removeVector(const std::string &id) {
   store_.erase(std::remove_if(store_.begin(), store_.end(),
                               [&id](const Vector &v) { return v.id == id; }),
@@ -53,33 +59,35 @@ void VectorEngine::load(const std::string &filename) {
   }
 }
 
-float VectorEngine::cosineSimilarity(const std::vector<float> &v1,
-                                     const std::vector<float> &v2) {
-  if (v1.size() != v2.size())
-    return 0.0f;
-  float dot = 0.0f, n1 = 0.0f, n2 = 0.0f;
+float VectorEngine::dotProduct(const std::vector<float> &v1,
+                               const std::vector<float> &v2) {
+  float dot = 0.0f;
   for (size_t i = 0; i < v1.size(); ++i) {
     dot += v1[i] * v2[i];
-    n1 += v1[i] * v1[i];
-    n2 += v2[i] * v2[i];
   }
-  if (n1 == 0 || n2 == 0)
-    return 0.0f;
-  return dot / (std::sqrt(n1) * std::sqrt(n2));
+  return dot;
 }
 
 std::vector<std::string> VectorEngine::search(const std::vector<float> &query,
                                               int topK) {
+  if (store_.empty()) return {};
+  
   std::vector<std::pair<float, std::string>> scores;
+  scores.reserve(store_.size());
+  
   for (const auto &v : store_) {
-    scores.push_back({cosineSimilarity(query, v.data), v.id});
+    scores.push_back({dotProduct(query, v.data), v.id});
   }
 
-  std::sort(scores.begin(), scores.end(),
+  int k = std::min((int)scores.size(), topK);
+  std::nth_element(scores.begin(), scores.begin() + k, scores.end(),
+            [](const auto &a, const auto &b) { return a.first > b.first; });
+
+  std::sort(scores.begin(), scores.begin() + k,
             [](const auto &a, const auto &b) { return a.first > b.first; });
 
   std::vector<std::string> results;
-  for (int i = 0; i < std::min((int)scores.size(), topK); ++i) {
+  for (int i = 0; i < k; ++i) {
     results.push_back(scores[i].second);
   }
   return results;

@@ -151,3 +151,43 @@ class EpisodicMemory:
                 print(f"[Episodic] DB locked during list_all, retrying... {e}")
                 time.sleep(1)
         return []
+
+    def get_by_timestamp(self, user_id, timestamp):
+        for _ in range(5):
+            try:
+                conn = sqlite3.connect(self.db_path, timeout=30)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute('''
+                    SELECT id, content, timestamp, importance, agent_id, memory_type
+                    FROM episodic_events
+                    WHERE user_id = ? AND ABS(timestamp - ?) < 0.001
+                    LIMIT 1
+                ''', (user_id, float(timestamp)))
+                r = cursor.fetchone()
+                conn.close()
+                if r:
+                    return {
+                        "id": r[0], "content": r[1], "timestamp": r[2], 
+                        "importance": r[3], "agent_id": r[4], "memory_type": r[5]
+                    }
+                return None
+            except sqlite3.OperationalError as e:
+                print(f"[Episodic] DB locked during get_by_timestamp, retrying... {e}")
+                time.sleep(1)
+        return None
+
+    def delete(self, user_id, memory_id):
+        for _ in range(5):
+            try:
+                conn = sqlite3.connect(self.db_path, timeout=30)
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("DELETE FROM episodic_events WHERE user_id = ? AND id = ?", (user_id, memory_id))
+                conn.commit()
+                conn.close()
+                return True
+            except sqlite3.OperationalError as e:
+                print(f"[Episodic] DB locked during delete, retrying... {e}")
+                time.sleep(1)
+        return False

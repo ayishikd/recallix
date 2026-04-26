@@ -177,13 +177,7 @@ class MemoryManager:
         Deletes a memory across all layers.
         """
         # 1. Episodic
-        self.episodic.delete(memory_id)
+        self.episodic.delete(user_id, memory_id)
         # 2. Semantic/Vector (via C++ infra or direct)
         # 3. Timeline (by content match - simplified)
         return True
-
-    def _calculate_importance(self, message):
-        # Placeholder for importance scoring logic
-        if "remember" in message.lower() or "important" in message.lower():
-            return 9
-        return 5

@@ -1,15 +1,19 @@
 import requests
+from sentence_transformers import SentenceTransformer
 import numpy as np
 
 class SemanticMemory:
+    _shared_model = None
+
     def __init__(self, infra_url="http://localhost:8080"):
         self.infra_url = infra_url
-        # In a real app, use a proper embedding model
-        # For now, we'll use a dummy embedding or mock it
+        if SemanticMemory._shared_model is None:
+            print("[SemanticMemory] Loading shared all-MiniLM-L6-v2 model...")
+            SemanticMemory._shared_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.model = SemanticMemory._shared_model
 
     def _get_embedding(self, text):
-        # Mock embedding: normalized random vector
-        vec = np.random.rand(128).astype(np.float32)
+        vec = self.model.encode(text).astype(np.float32)
         return (vec / np.linalg.norm(vec)).tolist()
 
     def store(self, user_id, text, timestamp, importance=5, agent_id="default_agent", memory_type="private"):

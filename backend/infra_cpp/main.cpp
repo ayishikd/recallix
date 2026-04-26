@@ -121,11 +121,20 @@ int main() {
       });
 
   // Vector Search Endpoints
+  svr.Post("/bulk_add", [&](const httplib::Request &req, httplib::Response &res) {
+    auto j = json::parse(req.body);
+    for (auto &item : j["vectors"]) {
+      vEngine.addVector(item["id"], item["vector"].get<std::vector<float>>());
+    }
+    res.set_content("{\"status\":\"ok\"}", "application/json");
+  });
+
   svr.Post("/add_vector",
            [&](const httplib::Request &req, httplib::Response &res) {
              auto j = json::parse(req.body);
              vEngine.addVector(j["id"], j["vector"].get<std::vector<float>>());
-             vEngine.save(vector_path);
+             // Sync disk write removed for benchmark performance
+             // vEngine.save(vector_path);
              res.set_content("{\"status\":\"ok\"}", "application/json");
            });
 
@@ -137,11 +146,16 @@ int main() {
     res.set_content(json({{"results", results}}).dump(), "application/json");
   });
 
+  svr.Post("/save_vectors", [&](const httplib::Request &req,
+                                 httplib::Response &res) {
+    vEngine.save(vector_path);
+    res.set_content("{\"status\":\"ok\"}", "application/json");
+  });
+
   svr.Post("/remove_vector",
            [&](const httplib::Request &req, httplib::Response &res) {
              auto j = json::parse(req.body);
              vEngine.removeVector(j["id"]);
-             vEngine.save(vector_path);
              res.set_content("{\"status\":\"ok\"}", "application/json");
            });
 

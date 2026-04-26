@@ -37,18 +37,35 @@ class MemoryRouter:
                 primary_query, 
                 top_k=top_k
             )
-            # Filter and add to appropriate bucket
-            filtered = [c for c in semantic_candidates if c.get("agent_id") == agent_id or c.get("memory_type") == "shared"]
+            # Filter and resolve content from Episodic Memory
+            resolved = []
+            for c in semantic_candidates:
+                if c.get("agent_id") == agent_id or c.get("memory_type") == "shared":
+                    # Fetch content from episodic memory using the timestamp as a proxy for the ID
+                    # In a real system, we'd use the full UUID
+                    ts = c.get("timestamp")
+                    if ts:
+                        episodic_match = self.memory.episodic.get_by_timestamp(user_id, ts)
+                        if episodic_match:
+                            c["content"] = episodic_match["content"]
+                            c["importance"] = episodic_match["importance"]
+                    resolved.append(c)
+            
             if "semantic" in memory_types:
-                results["semantic"] = filtered
+                results["semantic"] = resolved
             if "learning_history" in memory_types:
-                results["learning_history"].extend(filtered)
+                results["learning_history"].extend(resolved)
 
         # 3. Knowledge Graph Expansion
         if "knowledge_graph" in memory_types or plan.get("graph_expansion_depth", 0) > 0:
-            # Placeholder for graph retrieval logic
-            # Typically looks up entities from context in a graph DB
-            pass
+            import requests
+            try:
+                # Use the primary query as the starting node for expansion
+                res = requests.get(f"http://localhost:8080/get_neighbors?id={primary_query}")
+                if res.status_code == 200:
+                    results["graph"] = res.json() # C++ returns a JSON array
+            except:
+                pass
 
         # 4. Long Term / Insight retrieval
         if "long_term" in memory_types:

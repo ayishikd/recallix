@@ -12,6 +12,7 @@ struct Vector {
 class VectorEngine {
 public:
   void addVector(const std::string &id, const std::vector<float> &data);
+  void bulkAdd(const std::vector<std::pair<std::string, std::vector<float>>> &vectors);
   std::vector<std::string> search(const std::vector<float> &query, int topK);
   void removeVector(const std::string &id);
   void save(const std::string &filename);
@@ -19,8 +20,8 @@ public:
 
 private:
   std::vector<Vector> store_;
-  float cosineSimilarity(const std::vector<float> &v1,
-                         const std::vector<float> &v2);
+  float dotProduct(const std::vector<float> &v1,
+                   const std::vector<float> &v2);
 };
 
 #endif

@@ -118,6 +118,7 @@ class BackgroundWorker:
                 self.meta_memory.run_analysis()
             except Exception as e:
                 print(f"[Worker] Meta-memory error: {e}")
+            time.sleep(60 * 60) # Every hour
     def _run_evolution(self):
         time.sleep(120) # Delay after meta-analysis
         while self.running:

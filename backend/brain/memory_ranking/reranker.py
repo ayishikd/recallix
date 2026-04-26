@@ -2,11 +2,15 @@ import os
 from sentence_transformers import CrossEncoder
 
 class NeuralReranker:
+    _shared_model = None
+
     def __init__(self, model_name="BAAI/bge-reranker-base", cache_dir="backend/models/reranker"):
         self.cache_dir = cache_dir
         os.makedirs(self.cache_dir, exist_ok=True)
-        # Load the model locally
-        self.model = CrossEncoder(model_name, device="cpu", cache_folder=self.cache_dir)
+        if NeuralReranker._shared_model is None:
+            print(f"[NeuralReranker] Loading shared {model_name} model...")
+            NeuralReranker._shared_model = CrossEncoder(model_name, device="cpu", cache_folder=self.cache_dir)
+        self.model = NeuralReranker._shared_model
 
     def rerank(self, query, candidates, top_n=20):
         """
