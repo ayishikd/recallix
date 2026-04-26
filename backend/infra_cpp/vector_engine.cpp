@@ -201,10 +201,17 @@ void VectorEngine::insertHNSW(int node_idx) {
             if (nodes_[node_idx]->neighbors[l].size() >= 16) break;
             nodes_[node_idx]->neighbors[l].push_back(nbr);
             
-            std::lock_guard<std::recursive_mutex> node_lock(engine_mutex_); // Ensure thread safety for neighbors
+            std::lock_guard<std::recursive_mutex> node_lock(engine_mutex_);
             nodes_[nbr]->neighbors[l].push_back(node_idx);
+            
+            // Trim neighbors for existing node - Keep best 16
             if (nodes_[nbr]->neighbors[l].size() > 16) {
-                nodes_[nbr]->neighbors[l].resize(16);
+                int target_nbr = nbr;
+                std::sort(nodes_[target_nbr]->neighbors[l].begin(), nodes_[target_nbr]->neighbors[l].end(), [&](int a, int b) {
+                    return dot_product_simd(store_[target_nbr].data(), store_[a].data(), store_[target_nbr].size()) > 
+                           dot_product_simd(store_[target_nbr].data(), store_[b].data(), store_[target_nbr].size());
+                });
+                nodes_[target_nbr]->neighbors[l].resize(16);
             }
         }
     }

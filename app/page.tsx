@@ -342,7 +342,7 @@ const features = [
   { icon: Clock, title: "Universal Continuity", desc: "True cross-session persistence. Your agents maintain a permanent cognitive history that evolves as your user does.", color: "purple" },
   { icon: Lightbulb, title: "Reflection Insights", desc: "Background LLM threads extract behavioral patterns and high-level insights from raw episodic logs.", color: "amber" },
   { icon: Sparkles, title: "Meta-Memory", desc: "Self-optimizing retrieval policies and schema evolution that adapts to user-specific interaction patterns.", color: "emerald" },
-  { icon: ShieldCheck, title: "Hardware Moat", desc: "C++ HNSW engines with NEON SIMD acceleration. Millisecond search at 1,000,000 nodes, verified on M4 hardware.", color: "rose" },
+  { icon: ShieldCheck, title: "Hardware Moat", desc: "C++ HNSW engines with Cross-Platform SIMD acceleration (AVX2/SSE/NEON). Millisecond search at 1,000,000 nodes.", color: "rose" },
   { icon: Activity, title: "Observability", desc: "Full system metrics: memory growth, recall latency, cluster health, schema evolution.", color: "orange" },
   { icon: Shield, title: "Local-First", desc: "No cloud dependencies. All models run locally via Ollama. Data never leaves your machine.", color: "teal" },
 ];

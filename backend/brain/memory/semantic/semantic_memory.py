@@ -11,7 +11,13 @@ class SemanticMemory:
         vec = self.router.get_embedding(text)
         if not vec:
             return [0.0] * 384 # Fallback
-        return vec
+        
+        # Normalize for dot-product similarity in C++
+        v = np.array(vec)
+        norm = np.linalg.norm(v)
+        if norm > 1e-6:
+            v = v / norm
+        return v.tolist()
 
     def store(self, user_id, text, timestamp, importance=5, agent_id="default_agent", memory_type="private", skip_llm=False, sqlite_id=None):
         vector = self._get_embedding(text)

@@ -11,7 +11,7 @@ Recallix is a high-performance, model-agnostic cognitive memory engine. It provi
 *   **Multi-Agent Handover**: 100% Fidelity (Model A stores → Model B retrieves)
 
 ## 🏛️ Modern Architecture
-*   **Hardware Moat**: C++ HNSW indexing with **ARM NEON SIMD** hardware acceleration.
+*   **Hardware Moat**: C++ HNSW indexing with **Cross-Platform SIMD Acceleration** (AVX2, SSE, and NEON).
 *   **Cognitive Pipeline**: Atomic 12-step store process with **Hybrid Neural-Heuristic Reranking**.
 *   **ACID Persistence**: High-velocity ingestion via **SQLite WAL mode**.
 *   **Model Agnostic**: Neutral substrate supporting Llama, Mistral, GPT, and custom architectures.

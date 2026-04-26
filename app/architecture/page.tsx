@@ -59,13 +59,13 @@ const architectureStack: Component[] = [
   {
     id: "infrastructure",
     title: "Hardware Moat (C++)",
-    desc: "High-performance native infrastructure. HNSW indexing, NEON SIMD acceleration, and atomic timeline engines.",
+    desc: "High-performance native infrastructure. HNSW indexing, Cross-Platform SIMD acceleration (AVX2/SSE/NEON), and atomic timeline engines.",
     icon: Cpu,
     color: "purple",
     modules: [
-      { name: "VectorEngine", detail: "HNSW Hierarchical Index with bitwise NEON SIMD hardware acceleration", type: "infra" },
+      { name: "VectorEngine", detail: "HNSW Hierarchical Index with Cross-Platform SIMD hardware acceleration", type: "infra" },
       { name: "TimelineEngine", detail: "Atomic event indexing with millisecond precision linked to unique DB IDs", type: "infra" },
-      { name: "HardwareAccelerator", detail: "Intrinsic-level optimizations for ARM/M4 architecture parallelism", type: "infra" },
+      { name: "HardwareAccelerator", detail: "Intrinsic-level SIMD optimizations (AVX2, SSE, NEON) for maximum parallelism", type: "infra" },
       { name: "IDLinker", detail: "Unique ID Propagation system linking vector space to relational records", type: "infra" },
     ],
   },
@@ -91,7 +91,7 @@ const storePipelineSteps = [
   { step: "Working", label: "Active context update & summarization", icon: <Activity className="w-4 h-4" /> },
   { step: "Episodic", label: "SQLite WAL persistence with ID generation", icon: <Database className="w-4 h-4" /> },
   { step: "Vector", label: "128D Latent Embedding generation", icon: <Dna className="w-4 h-4" /> },
-  { step: "HNSW", label: "C++ HNSW index update (NEON SIMD)", icon: <Microchip className="w-4 h-4" /> },
+  { step: "HNSW", label: "C++ HNSW index update (AVX2/SSE/NEON)", icon: <Microchip className="w-4 h-4" /> },
   { step: "Linking", label: "Unique ID mapping (Vector <-> SQL)", icon: <Workflow className="w-4 h-4" /> },
   { step: "Ranking", label: "Heuristic importance scoring", icon: <Zap className="w-4 h-4" /> },
   { step: "Gating", label: "Long-term promotion threshold analysis", icon: <ShieldCheck className="w-4 h-4" /> },
@@ -193,7 +193,7 @@ export default function ArchitecturePage() {
               ))}
             </div>
             <div className="mt-8 pt-8 border-t border-white/5">
-              <span className="text-4xl font-black text-purple-400">1.28ms</span>
+              <span className="text-4xl font-black text-purple-400">0.1ms</span>
               <p className="text-[10px] text-zinc-600 uppercase font-bold tracking-widest mt-1">Verified search latency</p>
             </div>
           </motion.div>
@@ -300,7 +300,7 @@ export default function ArchitecturePage() {
            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { title: "Python 3.11", detail: "FastAPI, PyDantic, NumPy, Sentence-Transformers", icon: Activity },
-                { title: "C++ 17", detail: "HNSWlib, Eigen, Simd (NEON), libcurl, nlohmann-json", icon: Cpu },
+                { title: "C++ 17", detail: "HNSWlib, Eigen, Simd (AVX2/SSE/NEON), libcurl, nlohmann-json", icon: Cpu },
                 { title: "SQLite 3", detail: "WAL Mode, Full-Text Search (FTS5), JSON1 extension", icon: Database },
                 { title: "Next.js 14", detail: "Tailwind CSS, Framer Motion, Lucide, Recharts", icon: Layers },
               ].map((tech) => (
