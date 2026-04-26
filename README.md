@@ -1,10 +1,8 @@
-# Recallix - Cognitive MemoryOS for AI Agents
+# Recallix - Hardware-Accelerated Cognitive Memory for AI Agents
 
-Recallix is a high-performance, hardware-accelerated memory infrastructure designed to give AI agents long-term, human-like recall. By combining a multi-layered HNSW vector core with ARM NEON SIMD optimization, Recallix achieves sub-millisecond retrieval at production scale.
+Every AI agent today is amnesiac. It forgets everything between sessions. Multi-agent systems have no shared memory substrate. We built **Recallix** to fix that — a hardware-accelerated cognitive memory layer that any agent can read from and write to, regardless of which LLM is running underneath.
 
----
-
-## 📊 Full Performance Audit (Measured on Apple M4)
+## 🚀 0.63ms. 1,000,000 nodes. One machine.
 
 | Phase | Test Description | Result | Status |
 | :--- | :--- | :--- | :--- |
@@ -16,36 +14,33 @@ Recallix is a high-performance, hardware-accelerated memory infrastructure desig
 | **Scale**| **Speedup vs Python** | **~8,000x** | ✅ Validated |
 | **Build**| **1M Index Construction** | **128.01s** | ✅ Measured |
 
+![Recallix Benchmark Dashboard](./dashboard.png)
+
 ---
 
-## 🚀 Key Technological Moats
+## 💎 Why Recallix Exists
+Most RAG systems today are built for documents, not for active agent cognition. They are slow, stateless, and fail at scale. Recallix provides a persistent "Long-Term Memory" layer that allows agents to:
+- **Remember** previous user preferences across thousands of turns.
+- **Hand over** complex task context to other agents seamlessly.
+- **Retrieve** critical facts in sub-millisecond time, ensuring no interruption in agentic thought.
+
+---
+
+## 🛠️ Key Technological Moats
 
 ### 1. The HNSW + NEON Core
 Recallix bypasses the O(N) linear scan bottleneck by implementing a **Hierarchical Navigable Small World (HNSW)** graph in C++. Every distance calculation is vectorized using **ARM NEON SIMD** intrinsics, allowing for near-instant retrieval even as memory scale approaches millions of nodes.
 
 ### 2. Multi-Tiered Cognitive Architecture
 Recallix doesn't just store vectors; it manages memory tiers:
-- **Episodic Buffer**: Instant recall of recent interactions.
+- **Episodic Buffer**: Instant recall of recent interactions (SQLite-backed).
 - **Cognitive Index (HNSW)**: Logarithmic search over millions of historical facts.
 - **Clustering Engine**: Grouping related memories for high-level semantic synthesis.
 
-### 3. Agent Interoperability (Test Phase 03)
-Recallix acts as a universal **Cognitive Bus**. We verified this by storing knowledge using **Llama 3.1 8B** and retrieving/synthesizing it using **Mistral 7B**. The result was 100% semantic fidelity across model handovers.
-
-### 4. Long-Term Retention (Test Phase 04)
+### 3. Long-Term Retention (Test Phase 04)
 In a rigorous 500-turn simulation, Recallix maintained a 100% recall rate for 417 turns, with an overall retention of **83.3%**. 
-- **Failure Mode**: Identified as "Intent Shadowing" (Turn 100). 
-- **The Fix**: Adaptive Intent Router that triggers high-speed HNSW semantic searches when episodic confidence is low.
-
----
-
-## 🛠️ Tech Stack
-- **Core**: C++17 (Vector Engine, Graph Ops, Event Queue)
-- **Hardware Acceleration**: ARM NEON SIMD (Apple Silicon Optimized)
-- **Intelligence**: Python 3.10 (Memory Routing, LLM Context Inference)
-- **LLM Support**: Ollama (Llama 3.1, Mistral, Phi-3)
-- **Frontend**: Next.js 14, Framer Motion, Recharts
-- **Database**: SQLite3 (Episodic Persistence)
+- **Failure Mode Identified**: "Intent Shadowing" — where deep episodic memories were overshadowed by recent conversational noise.
+- **The Solution**: An Adaptive Intent Router that triggers high-speed HNSW semantic searches when episodic confidence is low.
 
 ---
 
