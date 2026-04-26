@@ -17,6 +17,7 @@ Every AI agent today is amnesiac. It forgets everything between sessions. Multi-
 > All benchmarks were measured on an Apple M4 Air with background cognitive workers disabled. Results are 100% reproducible via `scratch/benchmark_hnsw.cpp` and `scratch/retention_benchmark.py`.
 
 ![Recallix Benchmark Dashboard](./dashboard.png)
+![Recallix Architecture Flow](./architecture.png)
 
 ---
 
@@ -50,7 +51,7 @@ cmake --build build --target benchmark_hnsw
 Most RAG systems today are built for documents, not for active agent cognition. They are slow, stateless, and fail at scale. Recallix provides a persistent "Long-Term Memory" layer that allows agents to:
 - **Remember** previous user preferences across thousands of turns.
 - **Hand over** complex task context to other agents seamlessly.
-- **Retrieve** critical facts in sub-millisecond time, ensuring no interruption in agentic thought.
+- **Retrieve** critical facts in millisecond time, ensuring no interruption in agentic thought.
 
 ---
 
