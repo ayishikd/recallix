@@ -775,10 +775,18 @@ export default function HomePage() {
               </p>
             </div>
             <div className="bg-blue-600/10 border border-blue-600/20 rounded-3xl p-8 flex flex-col gap-4">
-               <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
+              <div className="flex flex-col">
+                <span className="text-4xl font-bold text-blue-400">0.01ms</span>
+                <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">Instant Write Latency</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-4xl font-bold text-purple-400">0.1ms</span>
+                <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">Search Latency (1M)</span>
+              </div>
+               <div className="flex items-center gap-2 text-blue-400 font-bold text-[10px] uppercase tracking-widest mt-2">
                  <ArrowRight className="w-3 h-3" />
                  Technical Fix: Semantic Fallback
-               </span>
+               </div>
                <p className="text-xs text-white/50 leading-relaxed">
                  Implementation of an Adaptive Intent Router that triggers high-speed HNSW 
                  semantic searches whenever episodic confidence is low.

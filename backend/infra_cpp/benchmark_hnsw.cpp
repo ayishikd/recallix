@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <thread>
 
 int main() {
     const int num_nodes = 1000000;
@@ -41,10 +42,26 @@ int main() {
         }
     }
     
-    auto end_build = std::chrono::high_resolution_clock::now();
-    std::chrono::duration<double> diff_build = end_build - start_build;
+    auto end_ingest = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff_ingest = end_ingest - start_build;
     
-    std::cout << "✅ Index built in " << diff_build.count() << " seconds." << std::endl;
+    std::cout << "✅ Ingestion complete (" << num_nodes << " nodes) in " << diff_ingest.count() << " seconds." << std::endl;
+    std::cout << "⏳ Waiting for background indexing to complete..." << std::endl;
+    
+    int next_milestone = 900000;
+    while (engine.getPendingCount() > 0) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        int current = engine.getPendingCount();
+        if (current <= next_milestone) {
+            std::cout << "   Remaining in buffer: " << current << " nodes..." << std::endl;
+            next_milestone -= 100000;
+        }
+    }
+    
+    auto end_index = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> diff_index = end_index - start_build;
+    
+    std::cout << "✅ Total Indexing complete in " << diff_index.count() << " seconds." << std::endl;
     
     // Search Benchmark
     std::cout << "🔍 Running " << num_queries << " random queries..." << std::endl;
@@ -77,7 +94,8 @@ int main() {
     
     std::cout << "\n📊 FINAL MEASURED RESULTS (1,000,000 NODES):" << std::endl;
     std::cout << "   SIMD Backend:          " << getSIMDBackend() << std::endl;
-    std::cout << "   Build Time:            " << diff_build.count() << " seconds" << std::endl;
+    std::cout << "   Ingest Time:           " << diff_ingest.count() << " seconds" << std::endl;
+    std::cout << "   Total Index Time:      " << diff_index.count() << " seconds" << std::endl;
     std::cout << "   Average Search Latency: " << avg_lat << " ms" << std::endl;
     std::cout << "   P99 Search Latency:     " << p99 << " ms" << std::endl;
     std::cout << "   Max Search Latency:     " << latencies.back() << " ms" << std::endl;

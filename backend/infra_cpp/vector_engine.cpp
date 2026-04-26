@@ -113,39 +113,49 @@ void VectorEngine::clear() {
     for (auto node : nodes_) delete node;
     nodes_.clear();
     entry_point_id_ = -1;
-    std::cout << "🧹 C++ Vector Engine cleared." << std::endl;
+}
+
+int VectorEngine::getPendingCount() const {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    return active_buffer_.size();
 }
 
 void VectorEngine::insertHNSW(int node_idx) {
-    HNSWNode* new_node = new HNSWNode(node_idx);
+    HNSWNode* new_node = nullptr;
+    int max_l = -1;
+    int curr_node_idx = -1;
+    
+    {
+        std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+        if (node_idx >= (int)nodes_.size()) return;
+        new_node = nodes_[node_idx];
+        if (entry_point_id_ != -1) {
+            curr_node_idx = entry_point_id_;
+            max_l = nodes_[entry_point_id_]->max_layer;
+        }
+    }
+    
     int target_layer = getRandomLayer();
     new_node->max_layer = target_layer;
-    
-    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
-    nodes_.push_back(new_node);
 
-    if (entry_point_id_ == -1) {
+    if (curr_node_idx == -1) {
+        std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
         entry_point_id_ = node_idx;
         return;
     }
 
-    // Prepare visited tracking
-    static thread_local std::vector<int> visited_flags;
-    static thread_local int current_version = 0;
-    if (visited_flags.size() < nodes_.size() + 1) {
-        visited_flags.resize(nodes_.size() + 1000, 0);
-    }
-    current_version++;
-
-    // 1. Greedy descent from top layer to target layer
-    int curr_node_idx = entry_point_id_;
     const auto& query_vec = store_[node_idx];
-    for (int l = nodes_[entry_point_id_]->max_layer; l > target_layer; --l) {
+    
+    // 1. Greedy descent from top layer to target layer
+    for (int l = max_l; l > target_layer; --l) {
         bool changed = true;
         while (changed) {
             changed = false;
             float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
-            for (int neighbor : nodes_[curr_node_idx]->neighbors[l]) {
+            
+            HNSWNode* curr_node = nodes_[curr_node_idx];
+            for (int i = 0; i < curr_node->neighbor_counts[l]; ++i) {
+                int neighbor = curr_node->neighbors[l][i];
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
@@ -157,10 +167,17 @@ void VectorEngine::insertHNSW(int node_idx) {
     }
 
     // 2. Beam search from target layer down to 0
+    static thread_local std::vector<int> visited_flags;
+    static thread_local int current_version = 0;
+    if (visited_flags.size() < nodes_.capacity()) {
+        visited_flags.resize(nodes_.capacity() + 1000, 0);
+    }
+    current_version++;
+
     const int efConstruction = 100;
     for (int l = std::min(target_layer, (int)MAX_LAYERS - 1); l >= 0; --l) {
-        std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k; // min-heap for top k
-        std::priority_queue<std::pair<float, int>> candidates; // max-heap for exploration
+        std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k;
+        std::priority_queue<std::pair<float, int>> candidates;
         
         float start_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
         candidates.push({start_sim, curr_node_idx});
@@ -170,11 +187,11 @@ void VectorEngine::insertHNSW(int node_idx) {
         std::vector<std::pair<float, int>> layer_results;
         while (!candidates.empty()) {
             auto [dist, c] = candidates.top(); candidates.pop();
-            
-            // Early exit
             if (top_k.size() >= (size_t)efConstruction && dist < top_k.top().first) break;
 
-            for (int neighbor : nodes_[c]->neighbors[l]) {
+            HNSWNode* node_c = nodes_[c];
+            for (int i = 0; i < node_c->neighbor_counts[l]; ++i) {
+                int neighbor = node_c->neighbors[l][i];
                 if (visited_flags[neighbor] != current_version) {
                     visited_flags[neighbor] = current_version;
                     float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
@@ -188,7 +205,6 @@ void VectorEngine::insertHNSW(int node_idx) {
             }
         }
 
-        // Best node for next layer
         while(!top_k.empty()) {
             layer_results.push_back(top_k.top());
             top_k.pop();
@@ -197,26 +213,22 @@ void VectorEngine::insertHNSW(int node_idx) {
         curr_node_idx = layer_results[0].second;
 
         // Neighbor linking with max M=16
-        for (auto& [sim, nbr] : layer_results) {
-            if (nodes_[node_idx]->neighbors[l].size() >= 16) break;
-            nodes_[node_idx]->neighbors[l].push_back(nbr);
-            
-            std::lock_guard<std::recursive_mutex> node_lock(engine_mutex_);
-            nodes_[nbr]->neighbors[l].push_back(node_idx);
-            
-            // Trim neighbors for existing node - Keep best 16
-            if (nodes_[nbr]->neighbors[l].size() > 16) {
-                int target_nbr = nbr;
-                std::sort(nodes_[target_nbr]->neighbors[l].begin(), nodes_[target_nbr]->neighbors[l].end(), [&](int a, int b) {
-                    return dot_product_simd(store_[target_nbr].data(), store_[a].data(), store_[target_nbr].size()) > 
-                           dot_product_simd(store_[target_nbr].data(), store_[b].data(), store_[target_nbr].size());
-                });
-                nodes_[target_nbr]->neighbors[l].resize(16);
+        {
+            std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+            HNSWNode* node_self = nodes_[node_idx];
+            for (auto& [sim, nbr] : layer_results) {
+                if (node_self->neighbor_counts[l] >= 16) break;
+                HNSWNode* node_nbr = nodes_[nbr];
+
+                node_self->neighbors[l][node_self->neighbor_counts[l]++] = nbr;
+                
+                if (node_nbr->neighbor_counts[l] < 16) {
+                    node_nbr->neighbors[l][node_nbr->neighbor_counts[l]++] = node_idx;
+                }
             }
         }
     }
 
-    // Update global entry point if new node is higher
     {
         std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
         if (entry_point_id_ == -1 || target_layer > nodes_[entry_point_id_]->max_layer) {
@@ -225,12 +237,57 @@ void VectorEngine::insertHNSW(int node_idx) {
     }
 }
 
+VectorEngine::VectorEngine() : entry_point_id_(-1), max_id_(0), stop_worker_(false) {
+    store_.reserve(1000000);
+    id_map_.reserve(1000000);
+    nodes_.reserve(1000000);
+    worker_thread_ = std::thread(&VectorEngine::backgroundWorkerLoop, this);
+}
+
+VectorEngine::~VectorEngine() {
+    {
+        std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+        stop_worker_ = true;
+    }
+    worker_cv_.notify_all();
+    if (worker_thread_.joinable()) {
+        worker_thread_.join();
+    }
+}
+
 void VectorEngine::addVector(const std::vector<float>& vec, const std::string& id) {
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     int node_idx = store_.size();
     store_.push_back(vec);
     id_map_.push_back(id);
-    insertHNSW(node_idx);
+    
+    // Create node (not yet linked in HNSW)
+    nodes_.push_back(new HNSWNode(node_idx));
+    
+    // Push to active buffer for background indexing
+    active_buffer_.push_back(node_idx);
+    worker_cv_.notify_one();
+}
+
+void VectorEngine::backgroundWorkerLoop() {
+    while (true) {
+        int node_to_index = -1;
+        {
+            std::unique_lock<std::recursive_mutex> lock(engine_mutex_);
+            worker_cv_.wait(lock, [this] { return stop_worker_ || !active_buffer_.empty(); });
+            
+            if (stop_worker_ && active_buffer_.empty()) break;
+            
+            if (!active_buffer_.empty()) {
+                node_to_index = active_buffer_.front();
+                active_buffer_.pop_front();
+            }
+        }
+        
+        if (node_to_index != -1) {
+            insertHNSW(node_to_index);
+        }
+    }
 }
 
 std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vector<float>& query_vec, int k) {
@@ -246,7 +303,9 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
         while (changed) {
             changed = false;
             float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
-            for (int neighbor : nodes_[curr_node_idx]->neighbors[l]) {
+            HNSWNode* curr_node = nodes_[curr_node_idx];
+            for (int i = 0; i < curr_node->neighbor_counts[l]; ++i) {
+                int neighbor = curr_node->neighbors[l][i];
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
@@ -274,11 +333,11 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
 
     while (!candidates.empty()) {
         auto [dist, c] = candidates.top(); candidates.pop();
-        
-        // Early exit
         if (top_k.size() >= (size_t)efSearch && dist < top_k.top().first) break;
 
-        for (int neighbor : nodes_[c]->neighbors[0]) {
+        HNSWNode* node_c = nodes_[c];
+        for (int i = 0; i < node_c->neighbor_counts[0]; ++i) {
+            int neighbor = node_c->neighbors[0][i];
             if (search_visited_flags[neighbor] != search_version) {
                 search_visited_flags[neighbor] = search_version;
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
@@ -292,14 +351,34 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
         }
     }
 
-    std::vector<std::pair<std::string, float>> results;
+    std::vector<std::pair<int, float>> combined_results;
     while (!top_k.empty()) {
-        results.push_back({id_map_[top_k.top().second], top_k.top().first});
+        combined_results.push_back({top_k.top().second, top_k.top().first});
         top_k.pop();
     }
-    std::reverse(results.begin(), results.end());
-    if (results.size() > (size_t)k) results.resize(k);
-    return results;
+
+    // 3. Brute-force search on active buffer
+    for (int buffer_idx : active_buffer_) {
+        float sim = dot_product_simd(query_vec.data(), store_[buffer_idx].data(), query_vec.size());
+        combined_results.push_back({buffer_idx, sim});
+    }
+
+    // 4. Sort and return top K
+    std::sort(combined_results.begin(), combined_results.end(), [](const auto& a, const auto& b) {
+        return a.second > b.second;
+    });
+
+    std::vector<std::pair<std::string, float>> final_results;
+    std::set<int> seen;
+    for (const auto& res : combined_results) {
+        if (seen.find(res.first) == seen.end()) {
+            final_results.push_back({id_map_[res.first], res.second});
+            seen.insert(res.first);
+            if (final_results.size() >= (size_t)k) break;
+        }
+    }
+    
+    return final_results;
 }
 
 const char* getSIMDBackend() {
