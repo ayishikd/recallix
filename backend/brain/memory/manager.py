@@ -41,7 +41,7 @@ class MemoryManager:
         self.recall_engine.attention = self.attention
         self.recall_engine.reranker = self.reranker
 
-    def store(self, user_id, message, agent_id="default_agent", memory_type="private"):
+    def store(self, user_id, message, agent_id="default_agent", memory_type="private", skip_llm=False):
         logs = []
         t0 = time.time()
 
@@ -63,9 +63,12 @@ class MemoryManager:
 
         # ── Stage 3: Importance Scoring ──
         s = time.time()
-        importance = ImportanceRanker.calculate(message, context["summary"])
+        if skip_llm:
+            importance = 5.0 # Neutral score for speed
+        else:
+            importance = ImportanceRanker.calculate(message, context["summary"])
         score_label = "LOW" if importance < 4 else ("MEDIUM" if importance < 7 else "HIGH" if importance < 9 else "CRITICAL")
-        log("python", "Importance Scoring", f"ImportanceRanker scored {importance:.1f}/10 ({score_label}). Factors: goal/preference/explicit/noise detection.", s)
+        log("python", "Importance Scoring", f"ImportanceRanker scored {importance:.1f}/10 ({score_label}). {'[BYPASSED]' if skip_llm else ''}", s)
 
         event = {
             "user_id": user_id,
@@ -78,8 +81,9 @@ class MemoryManager:
 
         # ── Stage 4: Episodic Memory ──
         s = time.time()
-        self.episodic.store(event)
-        log("python", "Episodic Storage", f"Stored in SQLite (WAL mode) with importance={importance:.1f}, reinforcement_score=1.0, keyword indexing enabled.", s)
+        episodic_id = self.episodic.store(event)
+        event["id"] = episodic_id # Attach the real DB ID
+        log("python", "Episodic Storage", f"Stored in SQLite with ID={episodic_id}, importance={importance:.1f}.", s)
 
         # ── Stage 5: Semantic Embedding ──
         s = time.time()
@@ -89,7 +93,9 @@ class MemoryManager:
             event["timestamp"], 
             importance=event["importance"],
             agent_id=agent_id,
-            memory_type=memory_type
+            memory_type=memory_type,
+            skip_llm=skip_llm,
+            sqlite_id=episodic_id # Pass the real ID
         )
         log("cpp", "Vector Engine", f"Generated 128D embedding via SemanticMemory. Sent POST /add_vector to C++ VectorEngine (:8080). Cosine similarity index updated.", s)
 
@@ -130,8 +136,11 @@ class MemoryManager:
 
         # ── Stage 11: State Inference ──
         s = time.time()
-        self.state_inference.infer_and_update(user_id, [event])
-        log("ollama", "State Inference", f"Sent to Llama 3.1:8B via Ollama. LLM infers hidden user states (skill_level, interest_strength). Results stored in states.db.", s)
+        if not skip_llm:
+            self.state_inference.infer_and_update(user_id, [event])
+            log("ollama", "State Inference", f"Sent to Llama 3.1:8B via Ollama. LLM infers hidden user states.", s)
+        else:
+            log("python", "State Inference", "[SKIPPED in Audit Mode]", s)
 
         # ── Stage 12: Processing Summary ──
         total_ms = round((time.time() - t0) * 1000, 1)

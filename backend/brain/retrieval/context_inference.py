@@ -45,7 +45,7 @@ class ContextInference:
         elif intent == "research":
             memory_types = ["semantic", "insight"]
         elif intent == "conversation":
-            memory_types = ["recent_episodic"]
+            memory_types = ["recent_episodic", "semantic"]
         elif intent == "preference_update":
             memory_types = ["long_term", "preference"]
         elif intent == "memory_store":

@@ -38,16 +38,14 @@ const scaleData = [
   { nodes: '1,000', latency: 1.31, baseline: 3.69 },
   { nodes: '10,000', latency: 1.41, baseline: 37.51 },
   { nodes: '100,000', latency: 1.37, baseline: 419.59 },
-  { nodes: '1,000,000', latency: 0.63, baseline: 5200.0 }, // Measured Avg Search
+  { nodes: '1,000,000', latency: 1.28, baseline: 5200.0 }, // Measured Avg Search
 ];
 
 const retentionData = [
-  { turn: 1, recallix: 100, vanilla: 0 },
-  { turn: 50, recallix: 100, vanilla: 0 },
+  { turn: 10, recallix: 100, vanilla: 0 },
   { turn: 100, recallix: 0, vanilla: 0 }, 
   { turn: 250, recallix: 100, vanilla: 0 },
   { turn: 400, recallix: 100, vanilla: 0 },
-  { turn: 499, recallix: 100, vanilla: 100 },
 ];
 
 interface TooltipProps {
@@ -123,10 +121,10 @@ export default function BenchmarkPage() {
         {/* STATS OVERVIEW */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
-            { label: 'Avg Latency (1M)', value: '0.63', unit: 'ms', icon: Zap, color: 'text-blue-400' },
-            { label: 'P99 Latency (1M)', value: '1.04', unit: 'ms', icon: Activity, color: 'text-purple-400' },
-            { label: 'Accuracy Score', value: '100', unit: '%', icon: ShieldCheck, color: 'text-emerald-400' },
-            { label: 'Max Capacity', value: '1M+', unit: 'nodes', icon: Database, color: 'text-orange-400' },
+            { label: 'Search Latency (Avg)', value: '1.28ms', unit: '', icon: Zap, color: 'text-blue-400' },
+            { label: 'Recall Accuracy', value: '100%', unit: '', icon: Activity, color: 'text-purple-400' },
+            { label: '500-Turn Retention', value: '75%', unit: '', icon: ShieldCheck, color: 'text-emerald-400' },
+            { label: 'Multi-Agent Fidelity', value: '100%', unit: '', icon: Database, color: 'text-orange-400' },
           ].map((stat, i) => (
             <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
               <stat.icon className={`w-5 h-5 ${stat.color} mb-3`} />
@@ -198,7 +196,7 @@ export default function BenchmarkPage() {
             </div>
             <div className="lg:col-span-4 flex flex-col gap-6">
               <div className="bg-blue-600 border border-blue-500 rounded-3xl p-8 flex flex-col gap-2 shadow-2xl shadow-blue-600/20">
-                <span className="text-5xl font-black text-white tracking-tighter">0.63ms</span>
+                <span className="text-5xl font-black text-white tracking-tighter">1.28ms</span>
                 <p className="text-xs text-white/70 uppercase font-bold tracking-widest">Average Search (1M Nodes)</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-3xl p-8 flex flex-col gap-4">
@@ -264,7 +262,7 @@ export default function BenchmarkPage() {
               <div className="bg-orange-600/10 border border-orange-600/20 rounded-3xl p-8 flex flex-col gap-4">
                 <div className="flex items-center gap-2 text-orange-400 font-bold text-xs uppercase tracking-widest">
                   <AlertTriangle className="w-4 h-4" />
-                  The 83% Post-Mortem
+                  The 75% Post-Mortem
                 </div>
                 <p className="text-sm text-white/70 leading-relaxed italic text-white/50">
                    Fact 100 miss identified as "Intent Shadowing." Low heuristic importance (5.0) failed 

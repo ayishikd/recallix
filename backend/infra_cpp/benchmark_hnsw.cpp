@@ -3,6 +3,8 @@
 #include <chrono>
 #include <random>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 
 int main() {
     const int num_nodes = 1000000;
@@ -19,7 +21,6 @@ int main() {
     auto start_build = std::chrono::high_resolution_clock::now();
     
     // Generate and add 1M vectors
-    // To be fair, we use a slightly more realistic loop
     for (int i = 0; i < num_nodes; ++i) {
         std::vector<float> vec(dim);
         for (int d = 0; d < dim; ++d) vec[d] = dist(rng);
@@ -30,7 +31,8 @@ int main() {
         norm = sqrt(norm);
         for (float &f : vec) f /= norm;
         
-        engine.addVector("id_" + std::to_string(i), vec);
+        // FIX: Cast int i to std::string to match the new VectorEngine API
+        engine.addVector(vec, std::to_string(i));
         
         if (i > 0 && i % 100000 == 0) {
             std::cout << "   Built " << i << " nodes..." << std::endl;

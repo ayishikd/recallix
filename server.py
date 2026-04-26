@@ -4,7 +4,6 @@ from backend.api.public.public_api import router as public_router
 from backend.api.internal.internal_api import router as internal_router
 from backend.api.agents.router import router as agents_router
 from backend.brain.memory.manager import MemoryManager
-from backend.brain.utils.background_worker import BackgroundWorker
 
 app = FastAPI(title="Recallix API")
 
@@ -22,15 +21,10 @@ app.include_router(internal_router)
 app.include_router(agents_router)
 
 memory = MemoryManager()
-worker = BackgroundWorker(memory)
-
-@app.on_event("startup")
-async def startup_event():
-    worker.start()
 
 @app.get("/")
 async def root():
-    return {"message": "MemoryOS API is running"}
+    return {"message": "Recallix API is running (Audit Mode)"}
 
 if __name__ == "__main__":
     import uvicorn

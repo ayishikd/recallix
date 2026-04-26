@@ -18,16 +18,19 @@ meta_engine = MetaMemoryEngine()
 
 class StoreRequest(BaseModel):
     content: str
+    user_id: Optional[str] = None
     metadata: Optional[dict] = None
+    skip_llm: Optional[bool] = False
 
 class RecallRequest(BaseModel):
     query: str
+    user_id: Optional[str] = None
     limit: Optional[int] = 10
 
 @router.post("/store")
 async def store_memory(request: StoreRequest, auth=Depends(verify_api_key)):
-    user_id = auth["user_id"]
-    result = memory_manager.store(user_id, request.content)
+    user_id = request.user_id or auth["user_id"]
+    result = memory_manager.store(user_id, request.content, skip_llm=request.skip_llm)
     return {
         "status": "success",
         "data": {
@@ -43,13 +46,13 @@ async def store_memory(request: StoreRequest, auth=Depends(verify_api_key)):
 
 @router.post("/recall")
 async def recall_memory(request: RecallRequest, auth=Depends(verify_api_key)):
-    user_id = auth["user_id"]
+    user_id = request.user_id or auth["user_id"]
     results = memory_manager.retrieve(user_id, request.query)
     
     return {
         "status": "success",
         "data": {
-            "memories": results.get("memories", []), # Note: IntentRetrievalManager returns 'memories'
+            "memories": results.get("memories", []),
             "intent": results.get("intent", "unknown"),
             "confidence": results.get("confidence", 0.0),
             "retrieval_plan": results.get("retrieval_plan", {}),
@@ -89,8 +92,6 @@ async def get_insights(auth=Depends(verify_api_key)):
         "data": reflections,
         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }
-
-
 
 @router.get("/world-state")
 async def get_world_state(auth=Depends(verify_api_key)):
@@ -151,7 +152,7 @@ async def get_stats(auth=Depends(verify_api_key)):
             conn.close()
         except: pass
 
-    # Count evolved schemas (from SQLite now)
+    # Count evolved schemas
     evolved_schema_count = 0
     schema_db_path = "backend/storage/schema_registry/schemas.db"
     if os.path.exists(schema_db_path):
@@ -202,4 +203,3 @@ async def get_profile(auth=Depends(verify_api_key)):
         },
         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }
-

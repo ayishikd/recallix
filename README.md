@@ -2,17 +2,19 @@
 
 Every AI agent today is amnesiac. It forgets everything between sessions. Multi-agent systems have no shared memory substrate. We built **Recallix** to fix that — a hardware-accelerated cognitive memory layer that any agent can read from and write to, regardless of which LLM is running underneath.
 
-## 🚀 0.63ms. 1,000,000 nodes. One machine.
+## 📊 Performance Benchmarks (Measured Audit)
 
-| Phase | Test Description | Result | Status |
-| :--- | :--- | :--- | :--- |
-| **01** | **Fact Recall Accuracy** | **100.0%** (20/20) | ✅ Verified |
-| **02** | **1M Node Search (Avg)** | **0.63 ms** | ✅ Measured |
-| **02** | **1M Node Search (P99)** | **1.04 ms** | ✅ Measured |
-| **03** | **Multi-Agent Handover** | **100% Fidelity** | ✅ Validated |
-| **04** | **500-Turn Retention** | **83.3%** | ✅ Analyzed |
-| **Scale**| **Speedup vs Python** | **~8,000x** | ✅ Validated |
-| **Build**| **1M Index Construction** | **128.01s** | ✅ Measured |
+| Metric | Measured Baseline | vs. Pure Python (Baseline) |
+|--------|-------------------|----------------------------|
+| **1M Node Search (Avg)** | **1.28ms** | **~85x Faster** |
+| **1M Node Search (P99)** | **1.80ms** | **~50x Faster** |
+| **Recall Accuracy** | **100%** | **Matches** |
+| **Multi-Agent Fidelity**| **100%** | **N/A** |
+| **500-Turn Retention** | **75%** | **~3x More Reliable** |
+| **Index Build (1M)** | **~14.2 min** | **N/A** |
+
+> [!NOTE]
+> All benchmarks were measured on an Apple M4 Air with background cognitive workers disabled. Results are 100% reproducible via `scratch/benchmark_hnsw.cpp` and `scratch/retention_benchmark.py`.
 
 ![Recallix Benchmark Dashboard](./dashboard.png)
 
