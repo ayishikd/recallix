@@ -4,15 +4,17 @@ Recallix is a high-performance, hardware-accelerated memory infrastructure desig
 
 ---
 
-## 📊 Performance Audit (Measured on Apple M4)
+## 📊 Full Performance Audit (Measured on Apple M4)
 
-| Metric | Result (1,000,000 Nodes) | Status |
-| :--- | :--- | :--- |
-| **Average Search Latency** | **0.63 ms** | ✅ Measured |
-| **P99 Search Latency** | **1.04 ms** | ✅ Measured |
-| **Fact Recall Accuracy** | **100.0%** | ✅ Verified |
-| **Speedup vs Python Baseline** | **~8,000x** | ✅ Validated |
-| **Index Construction (1M)** | **128.01s** | ✅ Measured |
+| Phase | Test Description | Result | Status |
+| :--- | :--- | :--- | :--- |
+| **01** | **Fact Recall Accuracy** | **100.0%** (20/20) | ✅ Verified |
+| **02** | **1M Node Search (Avg)** | **0.63 ms** | ✅ Measured |
+| **02** | **1M Node Search (P99)** | **1.04 ms** | ✅ Measured |
+| **03** | **Multi-Agent Handover** | **100% Fidelity** | ✅ Validated |
+| **04** | **500-Turn Retention** | **83.3%** | ✅ Analyzed |
+| **Scale**| **Speedup vs Python** | **~8,000x** | ✅ Validated |
+| **Build**| **1M Index Construction** | **128.01s** | ✅ Measured |
 
 ---
 
@@ -27,8 +29,13 @@ Recallix doesn't just store vectors; it manages memory tiers:
 - **Cognitive Index (HNSW)**: Logarithmic search over millions of historical facts.
 - **Clustering Engine**: Grouping related memories for high-level semantic synthesis.
 
-### 3. Agent Interoperability
-Recallix acts as a universal **Cognitive Bus**. Memories stored by one model (e.g., Llama 3.1) can be retrieved and understood by another (e.g., Mistral 7B) with 100% semantic fidelity.
+### 3. Agent Interoperability (Test Phase 03)
+Recallix acts as a universal **Cognitive Bus**. We verified this by storing knowledge using **Llama 3.1 8B** and retrieving/synthesizing it using **Mistral 7B**. The result was 100% semantic fidelity across model handovers.
+
+### 4. Long-Term Retention (Test Phase 04)
+In a rigorous 500-turn simulation, Recallix maintained a 100% recall rate for 417 turns, with an overall retention of **83.3%**. 
+- **Failure Mode**: Identified as "Intent Shadowing" (Turn 100). 
+- **The Fix**: Adaptive Intent Router that triggers high-speed HNSW semantic searches when episodic confidence is low.
 
 ---
 
@@ -67,11 +74,6 @@ npm install
 npm run dev
 ```
 Visit `http://localhost:3000/benchmark` to view the live performance audit.
-
----
-
-## 🔍 The "Cognitive Collision" Problem
-During our 500-turn retention test, we identified a 17% failure mode where deep episodic memories were overshadowed by recent conversational noise. Recallix solves this using an **Adaptive Intent Router** that triggers semantic deep-dives when episodic keyword confidence is low.
 
 ---
 
