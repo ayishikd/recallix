@@ -18,6 +18,34 @@ Every AI agent today is amnesiac. It forgets everything between sessions. Multi-
 
 ---
 
+## 🔬 Reproduce The Benchmarks
+Transparency is our moat. Every number above can be reproduced in under 10 minutes.
+
+### 1. 1M Node Scale Audit (C++)
+```bash
+cd backend/infra_cpp/build
+cmake .. && make benchmark_hnsw
+./benchmark_hnsw
+```
+
+### 2. Recall Accuracy & Retention (Python)
+*Requires `memory_service` and `server.py` to be running.*
+```bash
+# Fact recall accuracy test (20-fact stress test)
+python scratch/accuracy_benchmark.py
+
+# 500-turn long-term retention audit
+python scratch/retention_benchmark.py
+```
+
+### 3. Multi-Agent Handover (Python)
+```bash
+# Cross-model semantic fidelity test
+python scratch/multi_agent_benchmark.py
+```
+
+---
+
 ## 💎 Why Recallix Exists
 Most RAG systems today are built for documents, not for active agent cognition. They are slow, stateless, and fail at scale. Recallix provides a persistent "Long-Term Memory" layer that allows agents to:
 - **Remember** previous user preferences across thousands of turns.
@@ -36,11 +64,6 @@ Recallix doesn't just store vectors; it manages memory tiers:
 - **Episodic Buffer**: Instant recall of recent interactions (SQLite-backed).
 - **Cognitive Index (HNSW)**: Logarithmic search over millions of historical facts.
 - **Clustering Engine**: Grouping related memories for high-level semantic synthesis.
-
-### 3. Long-Term Retention (Test Phase 04)
-In a rigorous 500-turn simulation, Recallix maintained a 100% recall rate for 417 turns, with an overall retention of **83.3%**. 
-- **Failure Mode Identified**: "Intent Shadowing" — where deep episodic memories were overshadowed by recent conversational noise.
-- **The Solution**: An Adaptive Intent Router that triggers high-speed HNSW semantic searches when episodic confidence is low.
 
 ---
 
@@ -68,7 +91,6 @@ python server.py
 npm install
 npm run dev
 ```
-Visit `http://localhost:3000/benchmark` to view the live performance audit.
 
 ---
 
