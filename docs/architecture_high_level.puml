@@ -1,0 +1,48 @@
+@startuml High_Level_Architecture
+
+!define RECTANGLE class
+
+package "User Interface" {
+    [Next.js Dashboard] <<Frontend>>
+    [Streamlit Chat] <<RAG App>>
+}
+
+package "Orchestration Layer" {
+    [FastAPI Backend] <<Python>>
+}
+
+package "Cognitive Brain (Python)" {
+    [MemoryManager]
+    [RecallEngine]
+    [StateInference]
+    [MetaMemoryEngine]
+}
+
+package "Infrastructure Layer (C++)" {
+    [VectorEngine]
+    [GraphEngine]
+    [ClusteringEngine]
+    [TimelineEngine]
+}
+
+package "Models & AI" {
+    [Ollama (Llama 3.1:8B)]
+}
+
+package "Storage & Persistence" {
+    database "SQLite (Episodic, States, Registry)"
+    database "Vector Storage (128D Embeddings)"
+}
+
+' Interactions
+[Next.js Dashboard] --> [FastAPI Backend] : REST API
+[Streamlit Chat] --> [FastAPI Backend] : REST API / SDK
+[FastAPI Backend] --> [MemoryManager] : Method Call
+[MemoryManager] --> [VectorEngine] : HTTP POST (8080)
+[MemoryManager] --> [GraphEngine] : HTTP POST (8080)
+[MemoryManager] --> [TimelineEngine] : HTTP POST (8080)
+[MemoryManager] --> [Ollama (Llama 3.1:8B)] : REST API
+[MemoryManager] --> [SQLite (Episodic, States, Registry)] : SQL (WAL Mode)
+[VectorEngine] --> [Vector Storage (128D Embeddings)] : Direct IO
+
+@enduml

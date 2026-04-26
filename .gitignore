@@ -39,3 +39,28 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Databases and Local Models
+*.db
+*.sqlite
+*.sqlite3
+backend/models/
+storage/
+
+# Build and IDE
+**/build/
+.vscode/
+.idea/
+*.log

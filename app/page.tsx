@@ -539,7 +539,7 @@ export default function HomePage() {
       <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-white/5 flex items-center justify-between px-8 glass backdrop-blur-2xl">
         <div className="flex items-center gap-3 cursor-pointer">
           <Brain className="w-6 h-6 text-cyan-400" />
-          <span className="text-xl font-black tracking-tighter">MEMOIZE</span>
+          <span className="text-xl font-black tracking-tighter">RECALLIX</span>
         </div>
         <div className="hidden md:flex items-center gap-6">
           <Link href="/playground" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Live Demo</Link>
@@ -668,7 +668,7 @@ export default function HomePage() {
                 <h3 className="text-xl font-black">Solution</h3>
               </div>
               <p className="text-zinc-400 font-bold leading-relaxed">
-                Memoize is a plug-and-play cognitive memory engine. Six-layer architecture with
+                Recallix is a plug-and-play cognitive memory engine. Six-layer architecture with
                 neural ranking, RL-based forgetting, and self-evolving schemas.
               </p>
             </AnimatedSection>
@@ -679,7 +679,7 @@ export default function HomePage() {
               </div>
               <p className="text-zinc-400 font-bold leading-relaxed">
                 Every AI assistant, copilot, and autonomous agent needs persistent memory.
-                Memoize becomes the memory standard for agent frameworks.
+                Recallix becomes the memory standard for agent frameworks.
               </p>
             </AnimatedSection>
           </div>
@@ -765,7 +765,7 @@ export default function HomePage() {
       <footer className="border-t border-white/5 py-8 px-8 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Brain className="w-4 h-4 text-zinc-600" />
-          <span className="text-xs font-bold text-zinc-600">MEMOIZE</span>
+          <span className="text-xs font-bold text-zinc-600">RECALLIX</span>
         </div>
         <span className="text-xs text-zinc-700">Persistent Memory Infrastructure for AI Agents</span>
       </footer>

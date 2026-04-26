@@ -1,0 +1,79 @@
+@startuml Technical_Architecture_Depth
+
+!define COMPONENT class
+
+package "API Layer (FastAPI)" {
+    [Public API] << /memory/store | /recall >>
+    [Internal API] << /system/health | /debug >>
+    [Agents API] << /agent/dispatch | /status >>
+}
+
+package "Memory Management System (Brain)" {
+    class MemoryManager {
+        + store(user_id, content)
+        + retrieve(user_id, query)
+        --
+        12-Stage Pipeline (Sequential/Parallel)
+    }
+
+    MemoryManager --> SensoryMemory : Stage 1
+    MemoryManager --> WorkingMemory : Stage 2
+    MemoryManager --> ImportanceRanker : Stage 3
+    MemoryManager --> EpisodicMemory : Stage 4
+    MemoryManager --> SemanticMemory : Stage 5
+    MemoryManager --> GraphEngine : Stage 6
+    MemoryManager --> ClusteringEngine : Stage 7
+    MemoryManager --> SchemaTagging : Stage 8
+    MemoryManager --> LongTermPromotion : Stage 9
+    MemoryManager --> TimelineEngine : Stage 10
+    MemoryManager --> StateInference : Stage 11 (Ollama)
+    MemoryManager --> MetaMemoryEvolution : Stage 12
+}
+
+package "Infrastructure Engine (C++)" {
+    class VectorEngine {
+        + /add_vector
+        + /search
+        - 128D Embeddings (Cosine Sim)
+    }
+    class GraphEngine {
+        + /add_node
+        + /get_subgraph
+        - Event-Entity Relations
+    }
+    class TimelineEngine {
+        + /append_event
+        + /get_window
+        - Chronological Sequences
+    }
+    class ClusteringEngine {
+        + /recluster
+    }
+}
+
+package "Storage Layer (Persistence)" {
+    database "SQLite: memory.db" {
+        [episodic_events]
+        [reflections]
+    }
+    database "SQLite: states.db" {
+        [user_states]
+        [skill_levels]
+    }
+    database "SQLite: registry.db" {
+        [agents]
+        [access_keys]
+    }
+    database "Vector DB (Local Index)"
+}
+
+' Detailed Connections
+[Public API] --> MemoryManager : Orchestrates Storage/Recall
+SemanticMemory --> [VectorEngine] : HTTP POST (8080)
+GraphEngine --> [GraphEngine] : HTTP POST (8080)
+TimelineEngine --> [TimelineEngine] : HTTP POST (8080)
+StateInference --> [Ollama (Llama 3.1:8B)] : POST /api/generate
+EpisodicMemory --> [SQLite: memory.db] : Insert Event
+StateInference --> [SQLite: states.db] : Update states
+
+@enduml

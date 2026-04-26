@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Memoize — Persistent Memory Infrastructure for AI",
+  title: "Recallix — Persistent Memory Infrastructure for AI",
   description: "The universal memory layer for AI applications. Give agents long-term memory with a single API.",
 };
 

@@ -6,7 +6,7 @@ from memory_client import MemoryOSClient
 from llm_client import OllamaClient
 
 # Page Config
-st.set_page_config(page_title="Memoize RAG Chat", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="Recallix RAG Chat", page_icon="🧠", layout="wide")
 
 # Initialize DB
 init_db()
@@ -61,7 +61,7 @@ if "llm_client" not in st.session_state:
 
 # Sidebar: Auth and Agent Control
 with st.sidebar:
-    st.title("🧠 Memoize RAG")
+    st.title("🧠 Recallix RAG")
     
     if not st.session_state.logged_in:
         tabs = st.tabs(["Login", "Register"])
@@ -96,7 +96,8 @@ with st.sidebar:
         
         st.divider()
         st.subheader("Settings")
-        model_choice = st.selectbox("Select Model", ["mistral", "llama3.1:8b"])
+        model_choice = st.selectbox("Select Model", ["mistral:latest", "llama3.1:8b"])
+        shared_memory = st.checkbox("Use Shared Memory", value=True, help="When enabled, memories are shared across different agents/models.")
         
         # Agent Management
         agents_data = st.session_state.memory_client.list_agents()
@@ -134,16 +135,25 @@ if st.session_state.logged_in:
             memories = recall_results.get("data", {}).get("memories", [])
             
             # 3. LLM: Generate Response
-            system_prompt = f"You are a helpful assistant talking with user {st.session_state.user_id} via agent {selected_agent}. Use the provided memories to personalize your response."
+            model_name_map = {"mistral:latest": "Mistral", "llama3.1:8b": "Llama 3.1"}
+            current_identity = model_name_map.get(model_choice, model_choice)
+            
+            system_prompt = (
+                f"You are {current_identity}, a helpful AI assistant talking with user {st.session_state.user_id} via agent {selected_agent}. "
+                f"IMPORTANT: You MUST identify as {current_identity}. Even if the provided memories suggest you are another model (from a different part of the conversation), "
+                f"ignore that regarding your identity. Use memories ONLY for factual context about the user's needs."
+            )
             response = st.session_state.llm_client.generate(model_choice, system_prompt, prompt, memories)
             
             # 4. MemoryOS: Store Interaction
+            memory_type = "shared" if shared_memory else "private"
             store_result = st.session_state.memory_client.agent_store(
                 f"User said: {prompt} | Assistant replied: {response}", 
-                selected_agent
+                selected_agent,
+                memory_type=memory_type
             )
             
-            status_summary = f"Stored with importance {store_result.get('data', {}).get('importance', 'N/A')}"
+            status_summary = f"Stored ({memory_type}) with importance {store_result.get('data', {}).get('importance', 'N/A')}"
             
             # 5. Save and Rerun
             add_message(st.session_state.session_id, "assistant", response, status_summary)
@@ -182,4 +192,4 @@ if st.session_state.logged_in:
 else:
     st.info("Please login or register to start chatting.")
     # Show Visual Power of Memoize even when logged out as teaser
-    st.image("https://images.unsplash.com/photo-1544027993-37dbfe43562a?q=80&w=2070&auto=format&fit=crop", caption="Memoize Cognitive Architecture")
+    st.image("https://images.unsplash.com/photo-1544027993-37dbfe43562a?q=80&w=2070&auto=format&fit=crop", caption="Recallix Cognitive Architecture")

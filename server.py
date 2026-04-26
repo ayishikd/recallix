@@ -6,7 +6,7 @@ from backend.api.agents.router import router as agents_router
 from backend.brain.memory.manager import MemoryManager
 from backend.brain.utils.background_worker import BackgroundWorker
 
-app = FastAPI(title="Memoize API")
+app = FastAPI(title="Recallix API")
 
 app.add_middleware(
     CORSMiddleware,
