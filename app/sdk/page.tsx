@@ -2,206 +2,203 @@
 
 import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Code2, Terminal, Copy, Check, ArrowLeft, Brain } from "lucide-react";
+import { 
+  Terminal, Code2, Cpu, Database, 
+  CheckCircle2, Copy, Zap, ArrowRight,
+  Shield, Network, Brain, Github, Terminal as TerminalIcon
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 
-const CodeBlock = ({ code, language }: { code: string; language: string }) => {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); };
-    return (
-        <div className="relative group rounded-2xl overflow-hidden border border-white/5 bg-zinc-950/50 backdrop-blur-xl">
-            <div className="flex items-center justify-between px-5 py-2.5 border-b border-white/5 bg-white/5">
-                <div className="flex items-center gap-2">
-                    <Terminal className="w-3.5 h-3.5 text-zinc-500" />
-                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{language}</span>
-                </div>
-                <button onClick={handleCopy} className="p-1.5 hover:bg-white/5 rounded-lg transition-colors text-zinc-500 hover:text-white">
-                    {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                </button>
-            </div>
-            <div className="p-5 overflow-x-auto custom-scrollbar">
-                <pre className="text-sm font-mono leading-relaxed text-zinc-300"><code>{code}</code></pre>
-            </div>
-        </div>
-    );
-};
+const pythonCode = `import requests
+
+# 1. Initialize Memory Substrate
+BASE_URL = "http://localhost:8000"
+headers = {"X-API-Key": "recallix_test_key"}
+
+# 2. Store Cognitive Intent
+payload = {
+    "agent_id": "researcher_alpha",
+    "user_id": "user_123",
+    "text": "The project anniversary is December 12th.",
+    "importance": 9.5,
+    "metadata": {"category": "events"}
+}
+requests.post(f"{BASE_URL}/memory/store", json=payload, headers=headers)
+
+# 3. Retrieve Context Across Models
+query = {"query": "When is the anniversary?", "user_id": "user_123"}
+res = requests.post(f"{BASE_URL}/memory/recall", json=query, headers=headers)
+print(res.json()["context"])`;
+
+const curlCode = `curl -X POST "http://localhost:8000/memory/store" \\
+     -H "X-API-Key: recallix_test_key" \\
+     -H "Content-Type: application/json" \\
+     -d '{
+       "agent_id": "agent_01",
+       "user_id": "user_99",
+       "text": "User prefers dark mode interfaces.",
+       "importance": 7.0
+     }'`;
 
 export default function SDKPage() {
-    const pythonCode = `from memoryos import Memory
+  const [copied, setCopied] = useState<string | null>(null);
 
-# Initialize with your API key
-memory = Memory(api_key="local_dev_key")
+  const copyToClipboard = (text: string, id: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(id);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
-# Store a memory event
-memory.store("User is studying recursive algorithms.")
-
-# Recall semantically related context
-results = memory.recall("What is the user learning?")
-print(results)
-
-# Fetch the chronological timeline
-timeline = memory.timeline()
-
-# Get AI-generated reflection insights
-insights = memory.insights()
-
-# Get the user's cognitive profile
-profile = memory.profile()`;
-
-    const tsCode = `import { Memory } from "memoryos-sdk";
-
-// Initialize the client
-const memory = new Memory({
-  apiKey: "local_dev_key",
-  baseUrl: "http://localhost:8000"
-});
-
-// Store an event
-await memory.store("User studying recursion");
-
-// Perform semantic recall
-const results = await memory.recall("learning");
-
-// Access reflection insights
-const insights = await memory.insights();
-
-// Get full cognitive profile
-const profile = await memory.profile();`;
-
-    const curlCode = `# Store a memory
-curl -X POST http://localhost:8000/memory/store \\
-  -H "X-API-Key: local_dev_key" \\
-  -H "Content-Type: application/json" \\
-  -d '{"content": "User is studying ML"}'
-
-# Recall context
-curl -X POST http://localhost:8000/memory/recall \\
-  -H "X-API-Key: local_dev_key" \\
-  -H "Content-Type: application/json" \\
-  -d '{"query": "learning", "limit": 5}'
-
-# Get timeline
-curl -H "X-API-Key: local_dev_key" \\
-  http://localhost:8000/memory/timeline
-
-# Get system stats
-curl -H "X-API-Key: local_dev_key" \\
-  http://localhost:8000/memory/stats`;
-
-    return (
-        <div className="min-h-screen bg-black text-white selection:bg-cyan-500/30">
-            <nav className="fixed top-0 left-0 right-0 z-50 h-14 border-b border-white/5 flex items-center justify-between px-6 glass backdrop-blur-2xl">
-                <div className="flex items-center gap-4">
-                    <Link href="/" className="flex items-center gap-2 text-zinc-400 hover:text-white transition-colors">
-                        <ArrowLeft className="w-4 h-4" /> <Brain className="w-5 h-5 text-cyan-400" />
-                    </Link>
-                    <span className="text-sm font-black tracking-tight">DEVELOPER HUB</span>
-                </div>
-                <Link href="/playground"><Button variant="ghost" size="sm" className="text-zinc-500 hover:text-white text-xs font-bold">Live Playground</Button></Link>
-            </nav>
-
-            <main className="pt-28 pb-24 container mx-auto px-6 max-w-5xl">
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-16 text-center">
-                    <Badge className="mb-6 py-2 px-4 bg-cyan-500/10 border-cyan-500/20 text-cyan-400 rounded-full font-bold border">v1.0.0</Badge>
-                    <h1 className="text-5xl md:text-7xl font-black tracking-tighter mb-6 leading-tight">
-                        The Memory SDK<br /><span className="text-gradient">for AI Agents.</span>
-                    </h1>
-                    <p className="text-lg text-zinc-500 font-bold max-w-2xl mx-auto leading-relaxed">
-                        Give your agents permanent cognitive memory with a single line of code. All processing runs locally on your infrastructure.
-                    </p>
-                </motion.div>
-
-                {/* API Endpoints Reference */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="mb-16">
-                    <h2 className="text-2xl font-black tracking-tight mb-6">API Endpoints</h2>
-                    <div className="glass-card rounded-2xl overflow-hidden">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-white/5">
-                                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">Method</th>
-                                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">Endpoint</th>
-                                    <th className="text-left px-5 py-3 text-[10px] font-black uppercase tracking-widest text-zinc-500">Description</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {[
-                                    ["POST", "/memory/store", "Store a new memory event"],
-                                    ["POST", "/memory/recall", "Semantic recall with neural reranking"],
-                                    ["GET", "/memory/timeline", "Chronological event history"],
-                                    ["GET", "/memory/insights", "AI-generated reflection insights"],
-                                    ["GET", "/memory/world-state", "Inferred hidden user states"],
-                                    ["GET", "/memory/meta-insights", "Meta-memory optimization logs"],
-                                    ["GET", "/memory/stats", "System-wide memory statistics"],
-                                    ["GET", "/memory/profile", "User cognitive profile summary"],
-                                ].map(([method, path, desc]) => (
-                                    <tr key={path} className="border-b border-white/5 hover:bg-white/[0.02] transition-colors">
-                                        <td className="px-5 py-3"><Badge className={`text-[10px] font-black ${method === "POST" ? "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"}`}>{method}</Badge></td>
-                                        <td className="px-5 py-3 font-mono text-xs text-zinc-300">{path}</td>
-                                        <td className="px-5 py-3 text-xs font-bold text-zinc-500">{desc}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </motion.div>
-
-                {/* Code Examples */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-16">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center"><Code2 className="w-5 h-5 text-blue-400" /></div>
-                            <h2 className="text-xl font-black tracking-tight">Python SDK</h2>
-                        </div>
-                        <CodeBlock code={pythonCode} language="python" />
-                    </motion.div>
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="space-y-4">
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center"><Code2 className="w-5 h-5 text-cyan-400" /></div>
-                            <h2 className="text-xl font-black tracking-tight">TypeScript SDK</h2>
-                        </div>
-                        <CodeBlock code={tsCode} language="typescript" />
-                    </motion.div>
-                </div>
-
-                {/* cURL Examples */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="mb-16 space-y-4">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center"><Terminal className="w-5 h-5 text-orange-400" /></div>
-                        <h2 className="text-xl font-black tracking-tight">cURL / REST API</h2>
-                    </div>
-                    <CodeBlock code={curlCode} language="bash" />
-                </motion.div>
-
-                {/* Auth Info */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-                    <div className="bg-zinc-900/50 rounded-[32px] border border-white/5 p-8 md:p-12 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 blur-[80px] rounded-full" />
-                        <h2 className="text-2xl font-black tracking-tighter mb-8 relative z-10">Configuration</h2>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 relative z-10">
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-widest text-cyan-400 mb-2">Authentication</div>
-                                <p className="text-zinc-400 text-sm font-bold leading-relaxed">
-                                    All requests require an <code className="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">X-API-Key</code> header. Default dev key: <code className="text-white bg-zinc-800 px-1.5 py-0.5 rounded text-xs">local_dev_key</code>
-                                </p>
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-widest text-cyan-400 mb-2">Base URL</div>
-                                <p className="text-zinc-400 text-sm font-bold leading-relaxed">
-                                    Backend runs on <code className="text-white bg-zinc-800 px-1.5 py-0.5 rounded text-xs">http://localhost:8000</code>. All endpoints are prefixed with <code className="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded text-xs">/memory</code>
-                                </p>
-                            </div>
-                            <div>
-                                <div className="text-[10px] font-black uppercase tracking-widest text-cyan-400 mb-2">Local Models</div>
-                                <p className="text-zinc-400 text-sm font-bold leading-relaxed">
-                                    Requires <code className="text-white bg-zinc-800 px-1.5 py-0.5 rounded text-xs">ollama serve</code> with Mistral and Llama 3.1 models pulled locally.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-            </main>
+  return (
+    <div className="min-h-screen bg-[#050506] text-white selection:bg-cyan-500/30">
+      <nav className="fixed top-0 left-0 right-0 z-50 h-16 border-b border-white/5 flex items-center justify-between px-8 glass backdrop-blur-2xl">
+        <div className="flex items-center gap-3 cursor-pointer">
+          <Link href="/" className="flex items-center gap-3">
+            <Brain className="w-6 h-6 text-cyan-400" />
+            <span className="text-xl font-black tracking-tighter">RECALLIX</span>
+          </Link>
         </div>
-    );
+        <div className="hidden md:flex items-center gap-6">
+          <Link href="/architecture" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Architecture</Link>
+          <Link href="/benchmark" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Performance Audit</Link>
+          <Link href="/roadmap" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Roadmap</Link>
+          <Link href="/observability" className="text-sm font-bold text-zinc-400 hover:text-white transition-colors">Observability</Link>
+        </div>
+        <Link href="https://github.com/AyishikD/Recallix">
+           <Button className="h-10 px-5 bg-white text-black font-black rounded-full flex items-center gap-2">
+             <Github className="w-4 h-4" /> Star
+           </Button>
+        </Link>
+      </nav>
+
+      <main className="pt-32 pb-24 container mx-auto px-6 max-w-6xl">
+        <header className="mb-20">
+          <Badge className="mb-6 py-1.5 px-4 bg-cyan-500/10 border-cyan-500/20 text-cyan-400 rounded-full font-bold text-xs">
+            DEVELOPER ACCESS
+          </Badge>
+          <h1 className="text-6xl md:text-7xl font-black tracking-tighter leading-[0.85] mb-8">
+            Universal <br />
+            <span className="text-gradient">Integrations.</span>
+          </h1>
+          <p className="text-xl text-zinc-500 font-bold leading-relaxed max-w-2xl">
+            Give any agent persistent memory in minutes. Our REST API and SDKs enable 
+            seamless context propagation across your entire model stack.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
+          {/* Left Column: Code */}
+          <div className="lg:col-span-7 space-y-8">
+            <section className="bg-zinc-900/40 border border-white/5 rounded-[32px] p-8 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <TerminalIcon className="w-5 h-5 text-cyan-400" />
+                  <span className="text-sm font-black text-white uppercase tracking-widest">Python Implementation</span>
+                </div>
+                <button 
+                  onClick={() => copyToClipboard(pythonCode, "python")}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  {copied === "python" ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-zinc-500" />}
+                </button>
+              </div>
+              <pre className="text-xs md:text-sm font-mono text-cyan-100/80 leading-relaxed overflow-x-auto">
+                {pythonCode}
+              </pre>
+            </section>
+
+            <section className="bg-zinc-900/40 border border-white/5 rounded-[32px] p-8 relative overflow-hidden">
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <Code2 className="w-5 h-5 text-purple-400" />
+                  <span className="text-sm font-black text-white uppercase tracking-widest">Raw CURL Request</span>
+                </div>
+                <button 
+                  onClick={() => copyToClipboard(curlCode, "curl")}
+                  className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+                >
+                  {copied === "curl" ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-zinc-500" />}
+                </button>
+              </div>
+              <pre className="text-xs md:text-sm font-mono text-purple-100/80 leading-relaxed overflow-x-auto">
+                {curlCode}
+              </pre>
+            </section>
+          </div>
+
+          {/* Right Column: Setup */}
+          <div className="lg:col-span-5 space-y-6">
+            <div className="glass-card rounded-[32px] p-8 border border-white/5">
+              <h3 className="text-xl font-black mb-6">Local Environment</h3>
+              <div className="space-y-6">
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-black text-emerald-400">01</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white mb-1">Pull Required Models</h4>
+                    <p className="text-xs text-zinc-500 font-bold leading-relaxed mb-3">Recallix benchmarks require these exact models locally:</p>
+                    <div className="bg-black p-3 rounded-xl border border-white/5 font-mono text-[10px] text-zinc-400 space-y-1">
+                       <div>ollama pull llama3.1:8b</div>
+                       <div>ollama pull mistral:latest</div>
+                       <div>ollama pull mxbai-embed-large</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-black text-blue-400">02</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white mb-1">Initialize Core</h4>
+                    <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+                      Clone the substrate, install dependencies, and run the FastAPI entry point.
+                    </p>
+                    <div className="bg-black p-3 rounded-xl border border-white/5 font-mono text-[10px] text-zinc-400 mt-3">
+                       python server.py
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center flex-shrink-0">
+                    <span className="text-xs font-black text-purple-400">03</span>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-black text-white mb-1">Scale to Production</h4>
+                    <p className="text-xs text-zinc-500 font-bold leading-relaxed">
+                      Deploy the C++ VectorEngine for 10M+ node performance.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-cyan-500/5 border border-cyan-500/10 rounded-[32px] p-8">
+               <h3 className="text-lg font-black text-cyan-400 mb-2">SDK Roadmap</h3>
+               <p className="text-xs text-zinc-500 font-bold leading-relaxed mb-6">
+                 We are currently developing official wrappers for TypeScript and Rust.
+               </p>
+               <Button className="w-full h-12 bg-cyan-500 hover:bg-cyan-400 text-black font-black rounded-xl gap-2">
+                 Join the Waitlist <ArrowRight className="w-4 h-4" />
+               </Button>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <footer className="border-t border-white/5 py-8 px-8 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Brain className="w-4 h-4 text-zinc-600" />
+          <span className="text-xs font-bold text-zinc-600">RECALLIX SDK</span>
+        </div>
+        <Link href="https://github.com/AyishikD/Recallix">
+           <span className="text-xs text-zinc-700 hover:text-white transition-colors">View Repository</span>
+        </Link>
+      </footer>
+    </div>
+  );
 }

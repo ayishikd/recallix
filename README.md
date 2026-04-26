@@ -1,78 +1,61 @@
-# Recallix - Hardware-Accelerated Cognitive Memory for AI Agents
+# Recallix: Universal Memory Substrate for AI Agents
 
-Every AI agent today is amnesiac. It forgets everything between sessions. Multi-agent systems have no shared memory substrate. We built **Recallix** to fix that — a hardware-accelerated cognitive memory layer that any agent can read from and write to, regardless of which LLM is running underneath.
+Recallix is a high-performance, model-agnostic cognitive memory engine. It provides a shared, persistent substrate for any AI model or agent architecture, enabling cross-session continuity and verified multi-agent handover.
 
-## 📊 Performance Benchmarks (Measured Audit)
+![Recallix Dashboard](dashboard.png)
 
-| Metric | Measured Baseline | vs. Pure Python (Baseline) |
-|--------|-------------------|----------------------------|
-| **1M Node Search (Avg)** | **1.28ms** | **~85x Faster** |
-| **1M Node Search (P99)** | **1.80ms** | **~50x Faster** |
-| **Recall Accuracy** | **100%** | **Matches** |
-| **Multi-Agent Fidelity**| **100%** | **N/A** |
-| **500-Turn Retention** | **75%** | **~3x More Reliable** |
-| **Index Build (1M)** | **~14.2 min** | **N/A** |
+## 🚀 Key Performance Audits (Verified)
+*   **Search Latency**: 1.28ms (Avg) at 1,000,000 nodes
+*   **Recall Accuracy**: 100/100 (Reproducible stress-test)
+*   **Long-Term Retention**: 75% (After 500+ turns of noise)
+*   **Multi-Agent Handover**: 100% Fidelity (Model A stores → Model B retrieves)
 
-> [!NOTE]
-> All benchmarks were measured on an Apple M4 Air with background cognitive workers disabled. Results are 100% reproducible via `scratch/benchmark_hnsw.cpp` and `scratch/retention_benchmark.py`.
-
-![Recallix Benchmark Dashboard](./dashboard.png)
-![Recallix Architecture Flow](./architecture.png)
+## 🏛️ Modern Architecture
+*   **Hardware Moat**: C++ HNSW indexing with **ARM NEON SIMD** hardware acceleration.
+*   **Cognitive Pipeline**: Atomic 12-step store process with **Hybrid Neural-Heuristic Reranking**.
+*   **ACID Persistence**: High-velocity ingestion via **SQLite WAL mode**.
+*   **Model Agnostic**: Neutral substrate supporting Llama, Mistral, GPT, and custom architectures.
 
 ---
 
-## 🔬 Reproduce The Benchmarks
-Transparency is our moat. Every number above can be reproduced in under 10 minutes.
+## 🛠️ Getting Started
 
-### 1. 1M Node Scale Audit (C++)
+### 1. Requirements
+*   **Ollama**: Install from [ollama.com](https://ollama.com)
+*   **C++17**: For high-performance indexing
+*   **Python 3.11+**: For cognitive orchestration
+
+### 2. Pull Required Models (Audited Defaults)
+Recallix uses these specific models for our verified benchmarks. Pull them before running:
 ```bash
-cd backend/infra_cpp
-cmake -S . -B build
-cmake --build build --target benchmark_hnsw
-./build/benchmark_hnsw
+ollama pull llama3.1:8b
+ollama pull mistral:latest
+ollama pull mxbai-embed-large
+```
+> [!NOTE]
+> These are the audited defaults. If you wish to use different models, update the environment variables or `backend/brain/models/model_router.py`.
+
+### 3. Quickstart (Reproduction)
+
+#### A. 1M Node HNSW Search (C++)
+```bash
+cd backend/infra_cpp/build
+./benchmark_hnsw
 ```
 
-### 2. Recall Accuracy & Retention (Python)
-*Requires `memory_service` and `server.py` to be running.*
+#### B. High-Speed Retention Benchmark (Python)
 ```bash
-# Use the local venv python directly for reproducibility
-./venv/bin/python scratch/accuracy_benchmark.py
+# Simulates 500 turns in ~8s with hybrid reranking
 ./venv/bin/python scratch/retention_benchmark.py
 ```
 
-### 3. Multi-Agent Handover (Python)
+#### C. Multi-Agent Handover (Python)
 ```bash
+# Model A (Llama) stores secret → Model B (Mistral) retrieves
 ./venv/bin/python scratch/multi_agent_benchmark.py
 ```
 
 ---
 
-## 💎 Why Recallix Exists
-Most RAG systems today are built for documents, not for active agent cognition. They are slow, stateless, and fail at scale. Recallix provides a persistent "Long-Term Memory" layer that allows agents to:
-- **Remember** previous user preferences across thousands of turns.
-- **Hand over** complex task context to other agents seamlessly.
-- **Retrieve** critical facts in millisecond time, ensuring no interruption in agentic thought.
-
----
-
-## 🏗️ Getting Started
-
-### 1. Build the C++ Infrastructure
-```bash
-cd backend/infra_cpp
-cmake -S . -B build
-cmake --build build --target memory_service
-./build/memory_service
-```
-
-### 2. Initialize the Python Brain
-```bash
-python3 -m venv venv
-./venv/bin/pip install -r requirements.txt
-./venv/bin/python server.py
-```
-
----
-
 ## 📜 License
-MIT License. Built for the next generation of agentic AI.
+Apache-2.0
