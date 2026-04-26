@@ -129,17 +129,24 @@ void VectorEngine::insertHNSW(int node_idx) {
         return;
     }
 
+    // Prepare visited tracking
+    static thread_local std::vector<int> visited_flags;
+    static thread_local int current_version = 0;
+    if (visited_flags.size() < nodes_.size() + 1) {
+        visited_flags.resize(nodes_.size() + 1000, 0);
+    }
+    current_version++;
+
+    // 1. Greedy descent from top layer to target layer
     int curr_node_idx = entry_point_id_;
     const auto& query_vec = store_[node_idx];
-
-    // Greedy descent from top layer to target layer
     for (int l = nodes_[entry_point_id_]->max_layer; l > target_layer; --l) {
         bool changed = true;
         while (changed) {
             changed = false;
-            float curr_sim = calculateCosineSimilarity(query_vec, store_[curr_node_idx]);
+            float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
             for (int neighbor : nodes_[curr_node_idx]->neighbors[l]) {
-                float sim = calculateCosineSimilarity(query_vec, store_[neighbor]);
+                float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
                     curr_sim = sim;
@@ -149,59 +156,56 @@ void VectorEngine::insertHNSW(int node_idx) {
         }
     }
 
-    // efConstruction = 100: search beam width during graph construction
+    // 2. Beam search from target layer down to 0
     const int efConstruction = 100;
-
     for (int l = std::min(target_layer, (int)MAX_LAYERS - 1); l >= 0; --l) {
-        std::priority_queue<std::pair<float, int>> candidates;
-        candidates.push({calculateCosineSimilarity(query_vec, store_[curr_node_idx]), curr_node_idx});
+        std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k; // min-heap for top k
+        std::priority_queue<std::pair<float, int>> candidates; // max-heap for exploration
         
-        std::set<int> visited;
-        visited.insert(curr_node_idx);
-        visited.insert(node_idx);
+        float start_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
+        candidates.push({start_sim, curr_node_idx});
+        top_k.push({start_sim, curr_node_idx});
+        visited_flags[curr_node_idx] = current_version;
 
         std::vector<std::pair<float, int>> layer_results;
         while (!candidates.empty()) {
             auto [dist, c] = candidates.top(); candidates.pop();
-            layer_results.push_back({dist, c});
-            if ((int)layer_results.size() > efConstruction) break;
+            
+            // Early exit
+            if (top_k.size() >= (size_t)efConstruction && dist < top_k.top().first) break;
 
             for (int neighbor : nodes_[c]->neighbors[l]) {
-                if (visited.find(neighbor) == visited.end()) {
-                    visited.insert(neighbor);
-                    float sim = calculateCosineSimilarity(query_vec, store_[neighbor]);
-                    candidates.push({sim, neighbor});
+                if (visited_flags[neighbor] != current_version) {
+                    visited_flags[neighbor] = current_version;
+                    float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
+                    
+                    if (top_k.size() < (size_t)efConstruction || sim > top_k.top().first) {
+                        candidates.push({sim, neighbor});
+                        top_k.push({sim, neighbor});
+                        if (top_k.size() > (size_t)efConstruction) top_k.pop();
+                    }
                 }
             }
         }
 
-        // The best node found in this layer becomes the starting point for the next layer down
-        if (!layer_results.empty()) {
-            curr_node_idx = layer_results[0].second;
+        // Best node for next layer
+        while(!top_k.empty()) {
+            layer_results.push_back(top_k.top());
+            top_k.pop();
         }
+        std::sort(layer_results.begin(), layer_results.end(), std::greater<>());
+        curr_node_idx = layer_results[0].second;
 
-        // M = 16: max neighbors per node per layer
+        // Neighbor linking with max M=16
         for (auto& [sim, nbr] : layer_results) {
+            if (nodes_[node_idx]->neighbors[l].size() >= 16) break;
             nodes_[node_idx]->neighbors[l].push_back(nbr);
-            nodes_[nbr]->neighbors[l].push_back(node_idx);
             
-            // Trim neighbors for existing node
+            std::lock_guard<std::recursive_mutex> node_lock(engine_mutex_); // Ensure thread safety for neighbors
+            nodes_[nbr]->neighbors[l].push_back(node_idx);
             if (nodes_[nbr]->neighbors[l].size() > 16) {
-                int n_idx = nbr;
-                std::sort(nodes_[nbr]->neighbors[l].begin(), nodes_[nbr]->neighbors[l].end(), [&](int a, int b) {
-                    return calculateCosineSimilarity(store_[n_idx], store_[a]) > calculateCosineSimilarity(store_[n_idx], store_[b]);
-                });
                 nodes_[nbr]->neighbors[l].resize(16);
             }
-        }
-
-        // Trim neighbors for NEW node
-        if (nodes_[node_idx]->neighbors[l].size() > 16) {
-            int n_idx = node_idx;
-            std::sort(nodes_[node_idx]->neighbors[l].begin(), nodes_[node_idx]->neighbors[l].end(), [&](int a, int b) {
-                return calculateCosineSimilarity(store_[n_idx], store_[a]) > calculateCosineSimilarity(store_[n_idx], store_[b]);
-            });
-            nodes_[node_idx]->neighbors[l].resize(16);
         }
     }
 
@@ -223,19 +227,20 @@ void VectorEngine::addVector(const std::vector<float>& vec, const std::string& i
 }
 
 std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vector<float>& query_vec, int k) {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     if (entry_point_id_ == -1) return {};
 
-    int curr_node_idx = entry_point_id_;
     int efSearch = 50; 
+    int curr_node_idx = entry_point_id_;
 
-    // Greedy descent from top layer to layer 0
+    // 1. Greedy descent to layer 0
     for (int l = nodes_[entry_point_id_]->max_layer; l > 0; --l) {
         bool changed = true;
         while (changed) {
             changed = false;
-            float curr_sim = calculateCosineSimilarity(query_vec, store_[curr_node_idx]);
+            float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
             for (int neighbor : nodes_[curr_node_idx]->neighbors[l]) {
-                float sim = calculateCosineSimilarity(query_vec, store_[neighbor]);
+                float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
                     curr_sim = sim;
@@ -245,28 +250,35 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
         }
     }
 
-    // Layer-0 beam search with efSearch candidates
+    // 2. Beam search at layer 0
     std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k;
     std::priority_queue<std::pair<float, int>> candidates;
     
-    float start_sim = calculateCosineSimilarity(query_vec, store_[curr_node_idx]);
+    // Use the versioned visited list
+    static thread_local std::vector<int> search_visited_flags;
+    static thread_local int search_version = 0;
+    if (search_visited_flags.size() < nodes_.size() + 1) search_visited_flags.resize(nodes_.size() + 1000, 0);
+    search_version++;
+
+    float start_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
     candidates.push({start_sim, curr_node_idx});
     top_k.push({start_sim, curr_node_idx});
-    
-    std::set<int> visited;
-    visited.insert(curr_node_idx);
+    search_visited_flags[curr_node_idx] = search_version;
 
     while (!candidates.empty()) {
-        auto [sim, c] = candidates.top(); candidates.pop();
-        if (sim < top_k.top().first && top_k.size() >= (size_t)efSearch) break;
+        auto [dist, c] = candidates.top(); candidates.pop();
+        
+        // Early exit
+        if (top_k.size() >= (size_t)efSearch && dist < top_k.top().first) break;
 
         for (int neighbor : nodes_[c]->neighbors[0]) {
-            if (visited.find(neighbor) == visited.end()) {
-                visited.insert(neighbor);
-                float n_sim = calculateCosineSimilarity(query_vec, store_[neighbor]);
-                if (n_sim > top_k.top().first || top_k.size() < (size_t)efSearch) {
-                    candidates.push({n_sim, neighbor});
-                    top_k.push({n_sim, neighbor});
+            if (search_visited_flags[neighbor] != search_version) {
+                search_visited_flags[neighbor] = search_version;
+                float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
+                
+                if (top_k.size() < (size_t)efSearch || sim > top_k.top().first) {
+                    candidates.push({sim, neighbor});
+                    top_k.push({sim, neighbor});
                     if (top_k.size() > (size_t)efSearch) top_k.pop();
                 }
             }
