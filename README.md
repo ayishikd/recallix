@@ -23,9 +23,10 @@ Transparency is our moat. Every number above can be reproduced in under 10 minut
 
 ### 1. 1M Node Scale Audit (C++)
 ```bash
-cd backend/infra_cpp/build
-cmake .. && make benchmark_hnsw
-./benchmark_hnsw
+cd backend/infra_cpp
+cmake -S . -B build
+cmake --build build --target benchmark_hnsw
+./build/benchmark_hnsw
 ```
 
 ### 2. Recall Accuracy & Retention (Python)
@@ -72,10 +73,9 @@ Recallix doesn't just store vectors; it manages memory tiers:
 ### 1. Build the C++ Infrastructure
 ```bash
 cd backend/infra_cpp
-mkdir build && cd build
-cmake ..
-make -j$(sysctl -n hw.ncpu)
-./memory_service
+cmake -S . -B build
+cmake --build build --target memory_service
+./build/memory_service
 ```
 
 ### 2. Initialize the Python Brain
