@@ -16,6 +16,15 @@ Recallix is a high-performance, model-agnostic cognitive memory engine. It provi
 *   **ACID Persistence**: High-velocity ingestion via **SQLite WAL mode**.
 *   **Model Agnostic**: Neutral substrate supporting Llama, Mistral, GPT, and custom architectures.
 
+## 📊 Audited Configuration (The Ground Truth)
+To replicate our **1.28ms** search and **75% retention** metrics, we used the following defaults:
+*   **Reasoning Model**: `llama3.1:8b` (Ollama)
+*   **Retrieval Model**: `mistral:latest` (Ollama)
+*   **Embedding Model**: `mxbai-embed-large` (Ollama)
+*   **HNSW Params**: `M=16`, `efConstruction=200`, `efSearch=50`
+*   **Hardware**: Apple M-series (ARM) for **NEON SIMD** acceleration
+*   **Database**: SQLite with `PRAGMA journal_mode=WAL`
+
 ---
 
 ## 🛠️ Getting Started
