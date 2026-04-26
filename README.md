@@ -32,17 +32,14 @@ cmake --build build --target benchmark_hnsw
 ### 2. Recall Accuracy & Retention (Python)
 *Requires `memory_service` and `server.py` to be running.*
 ```bash
-# Fact recall accuracy test (20-fact stress test)
-python scratch/accuracy_benchmark.py
-
-# 500-turn long-term retention audit
-python scratch/retention_benchmark.py
+# Use the local venv python directly for reproducibility
+./venv/bin/python scratch/accuracy_benchmark.py
+./venv/bin/python scratch/retention_benchmark.py
 ```
 
 ### 3. Multi-Agent Handover (Python)
 ```bash
-# Cross-model semantic fidelity test
-python scratch/multi_agent_benchmark.py
+./venv/bin/python scratch/multi_agent_benchmark.py
 ```
 
 ---
@@ -52,19 +49,6 @@ Most RAG systems today are built for documents, not for active agent cognition. 
 - **Remember** previous user preferences across thousands of turns.
 - **Hand over** complex task context to other agents seamlessly.
 - **Retrieve** critical facts in sub-millisecond time, ensuring no interruption in agentic thought.
-
----
-
-## 🛠️ Key Technological Moats
-
-### 1. The HNSW + NEON Core
-Recallix bypasses the O(N) linear scan bottleneck by implementing a **Hierarchical Navigable Small World (HNSW)** graph in C++. Every distance calculation is vectorized using **ARM NEON SIMD** intrinsics, allowing for near-instant retrieval even as memory scale approaches millions of nodes.
-
-### 2. Multi-Tiered Cognitive Architecture
-Recallix doesn't just store vectors; it manages memory tiers:
-- **Episodic Buffer**: Instant recall of recent interactions (SQLite-backed).
-- **Cognitive Index (HNSW)**: Logarithmic search over millions of historical facts.
-- **Clustering Engine**: Grouping related memories for high-level semantic synthesis.
 
 ---
 
@@ -81,9 +65,8 @@ cmake --build build --target memory_service
 ### 2. Initialize the Python Brain
 ```bash
 python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python server.py
+./venv/bin/pip install -r requirements.txt
+./venv/bin/python server.py
 ```
 
 ### 3. Launch the Dashboard
