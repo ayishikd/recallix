@@ -1,22 +1,17 @@
 import requests
-from sentence_transformers import SentenceTransformer
 import numpy as np
+from ...models.model_router import ModelRouter
 
 class SemanticMemory:
-    _shared_model = None
-
     def __init__(self, infra_url="http://localhost:8080"):
         self.infra_url = infra_url
-        if SemanticMemory._shared_model is None:
-            print("[SemanticMemory] Loading shared all-MiniLM-L6-v2 model...")
-            SemanticMemory._shared_model = SentenceTransformer('all-MiniLM-L6-v2')
-        self.model = SemanticMemory._shared_model
+        self.router = ModelRouter()
 
     def _get_embedding(self, text):
-        vec = self.model.encode(text).astype(np.float32)
-        norm = np.linalg.norm(vec)
-        if norm > 0: vec = vec / norm
-        return vec.tolist()
+        vec = self.router.get_embedding(text)
+        if not vec:
+            return [0.0] * 384 # Fallback
+        return vec
 
     def store(self, user_id, text, timestamp, importance=5, agent_id="default_agent", memory_type="private", skip_llm=False, sqlite_id=None):
         vector = self._get_embedding(text)

@@ -29,7 +29,7 @@ private:
     std::vector<std::string> id_map_; // Maps internal index to original string ID
     std::vector<HNSWNode*> nodes_;
     int entry_point_id_;
-    std::mutex engine_mutex_;
+    std::recursive_mutex engine_mutex_;
     
     struct ThreadCtx {
         std::mt19937 rng;
@@ -42,5 +42,8 @@ private:
     int getRandomLayer();
     void insertHNSW(int node_idx);
 };
+
+// Returns the SIMD backend used at compile time ("NEON", "AVX2", "SSE", or "SCALAR")
+const char* getSIMDBackend();
 
 #endif

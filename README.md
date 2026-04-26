@@ -21,9 +21,11 @@ To replicate our **1.28ms** search and **75% retention** metrics, we used the fo
 *   **Reasoning Model**: `llama3.1:8b` (Ollama)
 *   **Retrieval Model**: `mistral:latest` (Ollama)
 *   **Embedding Model**: `mxbai-embed-large` (Ollama)
-*   **HNSW Params**: `M=16`, `efConstruction=200`, `efSearch=50`
-*   **Hardware**: Apple M-series (ARM) for **NEON SIMD** acceleration
-*   **Database**: SQLite with `PRAGMA journal_mode=WAL`
+*   **HNSW Params**: `M=16`, `efConstruction=100`, `efSearch=50`
+*   **Database**: SQLite with `PRAGMA journal_mode=WAL` and `PRAGMA synchronous=NORMAL`
+*   **Hardware**: Apple M-series (ARM) with **NEON SIMD** acceleration
+
+> ⚠️ **Hardware Caveat**: Benchmarks were measured on ARM (Apple Silicon). On x86 hardware, the engine uses **AVX2** SIMD acceleration (with SSE/scalar fallback). Search latency will vary depending on your CPU architecture. All models and parameters are configurable via `config.yaml`.
 
 ---
 

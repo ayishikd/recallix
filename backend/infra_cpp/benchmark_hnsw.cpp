@@ -14,6 +14,7 @@ int main() {
     VectorEngine engine;
     
     std::cout << "🚀 Initializing 1,000,000 node benchmark..." << std::endl;
+    std::cout << "   SIMD: " << getSIMDBackend() << " | M=16 | efConstruction=100 | efSearch=50 | dim=" << dim << std::endl;
     
     std::mt19937 rng(42);
     std::uniform_real_distribution<float> dist(-1.0, 1.0);
@@ -31,11 +32,12 @@ int main() {
         norm = sqrt(norm);
         for (float &f : vec) f /= norm;
         
-        // FIX: Cast int i to std::string to match the new VectorEngine API
         engine.addVector(vec, std::to_string(i));
         
         if (i > 0 && i % 100000 == 0) {
-            std::cout << "   Built " << i << " nodes..." << std::endl;
+            auto now = std::chrono::high_resolution_clock::now();
+            std::chrono::duration<double> elapsed = now - start_build;
+            std::cout << "   Built " << i << " nodes... (" << elapsed.count() << "s elapsed)" << std::endl;
         }
     }
     
@@ -70,9 +72,15 @@ int main() {
     for (double l : latencies) total_lat += l;
     double avg_lat = total_lat / num_queries;
     
+    std::sort(latencies.begin(), latencies.end());
+    double p99 = latencies[(int)(num_queries * 0.99)];
+    
     std::cout << "\n📊 FINAL MEASURED RESULTS (1,000,000 NODES):" << std::endl;
+    std::cout << "   SIMD Backend:          " << getSIMDBackend() << std::endl;
+    std::cout << "   Build Time:            " << diff_build.count() << " seconds" << std::endl;
     std::cout << "   Average Search Latency: " << avg_lat << " ms" << std::endl;
-    std::cout << "   P99 Search Latency: " << *std::max_element(latencies.begin(), latencies.end()) << " ms" << std::endl;
+    std::cout << "   P99 Search Latency:     " << p99 << " ms" << std::endl;
+    std::cout << "   Max Search Latency:     " << latencies.back() << " ms" << std::endl;
     
     return 0;
 }

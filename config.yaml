@@ -1,0 +1,76 @@
+# ============================================================================
+# Recallix Configuration
+# ============================================================================
+# This is the single source of truth for all model and infrastructure settings.
+# Edit this file to switch between providers, models, or tune performance.
+#
+# MODELS:
+#   - Set "provider" to choose your LLM backend.
+#   - Under each provider, specify the model names you want to use.
+#   - You can use ANY Ollama model (e.g. "phi3", "gemma2:2b", "codellama")
+#     or ANY API provider by adding your key below.
+#
+# To add a new Ollama model, just change the name:
+#   smart_model: "deepseek-r1:8b"
+#
+# To switch to an API provider, change provider and fill in the key:
+#   provider: "openai"
+# ============================================================================
+
+models:
+  # Which provider to use: "ollama", "openai", "anthropic", "groq", or "custom"
+  provider: "ollama"
+
+  # --- Ollama (Local) ---
+  # Any model pulled via `ollama pull <name>` works here.
+  # Audited defaults: llama3.1:8b, mistral:latest, mxbai-embed-large
+  ollama:
+    base_url: "http://localhost:11434"
+    fast_model: "mistral:latest"        # Used for: compression, summarization, intent detection
+    smart_model: "llama3.1:8b"          # Used for: reasoning, reflection, schema discovery
+    embedding_model: "mxbai-embed-large" # Used for: 128D vector embeddings
+
+  # --- OpenAI (API) ---
+  openai:
+    api_key: ""                          # Set your OpenAI API key
+    base_url: "https://api.openai.com/v1"
+    fast_model: "gpt-4o-mini"
+    smart_model: "gpt-4o"
+    embedding_model: "text-embedding-3-small"
+
+  # --- Anthropic (API) ---
+  anthropic:
+    api_key: ""                          # Set your Anthropic API key
+    base_url: "https://api.anthropic.com"
+    fast_model: "claude-3-5-haiku-20241022"
+    smart_model: "claude-sonnet-4-20250514"
+
+  # --- Groq (API) ---
+  groq:
+    api_key: ""                          # Set your Groq API key
+    base_url: "https://api.groq.com/openai/v1"
+    fast_model: "llama-3.1-8b-instant"
+    smart_model: "llama-3.3-70b-versatile"
+
+  # --- Custom (Any OpenAI-compatible API) ---
+  custom:
+    api_key: ""
+    base_url: ""                         # e.g. "https://your-server.com/v1"
+    fast_model: ""
+    smart_model: ""
+    embedding_model: ""
+
+# ============================================================================
+# Database Configuration
+# ============================================================================
+database:
+  journal_mode: "WAL"
+  synchronous: "NORMAL"
+
+# ============================================================================
+# HNSW Index Parameters
+# ============================================================================
+hnsw:
+  M: 16                   # Max neighbors per node per layer
+  ef_construction: 100    # Construction beam width (higher = better graph, slower build)
+  ef_search: 50           # Search beam width (higher = better recall, slower search)
