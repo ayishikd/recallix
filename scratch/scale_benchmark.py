@@ -13,7 +13,8 @@ WARMUP_RUNS = 100 # To remove cold-start effects
 def cpp_search(query, top_k=5):
     start = time.time()
     payload = {"query": query.tolist(), "top_k": top_k}
-    res = requests.post(f"{INFRA_URL}/search_vector", json=payload)
+    headers = {"X-Internal-Key": "Recallix-Core-8892"}
+    res = requests.post(f"{INFRA_URL}/search_vector", json=payload, headers=headers)
     end = time.time()
     if res.status_code != 200:
         return None, 0
@@ -45,7 +46,8 @@ def run_scale_benchmark():
         print(f"\n📊 Testing Scale: {scale:,} nodes")
         
         # Clear C++
-        requests.post(f"{INFRA_URL}/clear")
+        headers = {"X-Internal-Key": "Recallix-Core-8892"}
+        requests.post(f"{INFRA_URL}/clear", headers=headers)
 
         # 1. Generate Clustered Data (Realistic Semantics)
         num_clusters = 5
@@ -66,7 +68,7 @@ def run_scale_benchmark():
             chunk = []
             for j in range(i, min(i + chunk_size, scale)):
                 chunk.append({"id": python_ids[j], "vector": raw_vectors[j].tolist()})
-            requests.post(f"{INFRA_URL}/bulk_add", json={"vectors": chunk})
+            requests.post(f"{INFRA_URL}/bulk_add", json={"vectors": chunk}, headers=headers)
         
         # 2.5 Wait for Indexing to Complete
         print(f"   ⏳ Waiting for HNSW indexing to complete...")
@@ -74,7 +76,7 @@ def run_scale_benchmark():
         last_pending = -1
         while True:
             try:
-                res = requests.get(f"{INFRA_URL}/status", timeout=2)
+                res = requests.get(f"{INFRA_URL}/status", timeout=2, headers=headers)
                 if res.status_code == 200:
                     pending = res.json().get("pending_count", 0)
                     if pending == 0:
@@ -173,6 +175,16 @@ def run_scale_benchmark():
     plt.savefig(plot_path)
     print(f"\n📈 Rigorous benchmark plot saved to {plot_path}")
 
+def worker_query(q):
+    # We must re-init or use the global mm inside the worker process safely
+    import os
+    import time
+    from backend.api.deps import get_memory_manager
+    local_mm = get_memory_manager()
+    start = time.time()
+    local_mm.retrieve("test_user_concurrent", q, limit=5)
+    return (time.time() - start) * 1000
+
 def run_concurrency_benchmark():
     from concurrent.futures import ProcessPoolExecutor
     from backend.api.deps import get_memory_manager
@@ -186,8 +198,9 @@ def run_concurrency_benchmark():
     user_id = "test_user_concurrent"
     
     # 1. Clear existing
+    headers = {"X-Internal-Key": "Recallix-Core-8892"}
     mm.episodic.cleanup_low_importance_memories(user_id) # pseudo clear
-    requests.post(f"http://localhost:8080/clear")
+    requests.post(f"http://localhost:8080/clear", headers=headers)
     
     # 2. Store test set
     num_docs = 100
@@ -199,7 +212,7 @@ def run_concurrency_benchmark():
     print("   ⏳ Waiting for index sync...")
     for _ in range(10):
         try:
-            res = requests.get("http://localhost:8080/status", timeout=1)
+            res = requests.get("http://localhost:8080/status", timeout=1, headers=headers)
             if res.status_code == 200 and res.json().get("pending_count", 0) == 0:
                 break
         except: pass
@@ -208,18 +221,6 @@ def run_concurrency_benchmark():
     # 3. Concurrent Retrieval
     queries = [f"What is the status of Project Zephyr {i}?" for i in range(200)]
     
-    def worker_query(q):
-        # We must re-init or use the global mm inside the worker process safely
-        # To avoid SQLite lock issues across processes, we can use threads if SQLite is WAL, 
-        # but the user requested ProcessPoolExecutor for CPU boundedness.
-        # SQLite in read mode is usually fine, but let's instantiate fresh.
-        import os
-        from backend.api.deps import get_memory_manager
-        local_mm = get_memory_manager()
-        start = time.time()
-        local_mm.retrieve(user_id, q, limit=5)
-        return (time.time() - start) * 1000
-
     print("   🌪️ Firing 200 concurrent queries via ProcessPoolExecutor...")
     start_time = time.time()
     latencies = []

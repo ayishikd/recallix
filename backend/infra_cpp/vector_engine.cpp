@@ -360,8 +360,25 @@ void VectorEngine::insertHNSW(int node_idx) {
                     if (node_nbr->neighbors[l][i] == node_idx) { exists = true; break; }
                 }
 
-                if (!exists && node_nbr->neighbor_counts[l] < 16) {
-                    node_nbr->neighbors[l][node_nbr->neighbor_counts[l]++] = node_idx;
+                if (!exists) {
+                    if (node_nbr->neighbor_counts[l] < 16) {
+                        node_nbr->neighbors[l][node_nbr->neighbor_counts[l]++] = node_idx;
+                    } else {
+                        int worst_idx = -1;
+                        float worst_sim = 1e9f;
+                        for (int i = 0; i < 16; ++i) {
+                            int existing_nbr = node_nbr->neighbors[l][i];
+                            float s = dot_product_simd(store_[nbr].data(), store_[existing_nbr].data(), store_[nbr].size());
+                            if (s < worst_sim) {
+                                worst_sim = s;
+                                worst_idx = i;
+                            }
+                        }
+                        float new_sim = dot_product_simd(store_[nbr].data(), store_[node_idx].data(), store_[nbr].size());
+                        if (new_sim > worst_sim) {
+                            node_nbr->neighbors[l][worst_idx] = node_idx;
+                        }
+                    }
                 }
             }
         }
