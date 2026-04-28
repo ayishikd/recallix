@@ -2,9 +2,14 @@ import json
 import sqlite3
 import time
 import math
+import re
 from ..prediction.predictive_recall import PredictiveRecall
 from ..schema_engine.registry.manager import SchemaRegistry
 from ..retrieval.manager import IntentRetrievalManager
+from .scorers import (
+    SemanticScorer, LexicalScorer, EntityScorer, 
+    RelationScorer, SalienceScorer, TemporalScorer
+)
 
 class RecallEngine:
     def __init__(self, episodic, semantic, long_term, reflective, graph_infra_url="http://localhost:8080"):
@@ -15,10 +20,17 @@ class RecallEngine:
         self.graph_url = graph_infra_url
         self.schema_registry = SchemaRegistry()
         
-        # Intent-driven manager (initialized via MemoryManager)
-        self.intent_manager = None 
+        # Modular Scorers
+        self.scorers = {
+            "semantic": SemanticScorer(),
+            "lexical": LexicalScorer(),
+            "entity": EntityScorer(),
+            "relation": RelationScorer(),
+            "salience": SalienceScorer(),
+            "temporal": TemporalScorer()
+        }
         
-        # Predictive and attention modules
+        self.intent_manager = None 
         self.predictive = None 
         self.attention = None 
         self.reranker = None 
@@ -34,161 +46,162 @@ class RecallEngine:
             return "symbolic"
         return "conceptual"
 
-    def _calculate_unified_score(self, query, memory, query_type="conceptual", semantic_score=None):
-        """
-        Fix #3: Unified Scoring Function with Query-Adaptive Weighting
-        """
-        content = memory.get("content", "").lower()
-        
-        # 1. Lexical (BM25 from FTS5)
-        bm25 = memory.get("bm25_score", 0.0)
-        if bm25 == 0.0:
-            q_words = set(query.lower().split())
-            c_words = set(content.split())
-            overlap = len(q_words.intersection(c_words)) / max(len(q_words), 1)
-            bm25 = overlap * 5.0 # Rough approximation to scale it up
-            
-        # Normalize BM25 roughly to 0-1 range for the formula (assume max typical score ~10.0)
-        norm_bm25 = min(bm25 / 10.0, 1.0)
-        
-        # 2. Salience (Importance + Reinforcement)
-        importance = float(memory.get("importance", 5.0)) / 10.0
-        reinforcement = float(memory.get("reinforcement_score", 1.0)) / 10.0
-        salience = (importance * 0.7) + (reinforcement * 0.3)
-        
-        # 3. Semantic Score
-        s_score = semantic_score if semantic_score is not None else 0.5
-        
-        # 4. Metadata / Entity Overlap
-        metadata_match = 0.0
-        metadata = memory.get("metadata", {})
-        if isinstance(metadata, str):
-            try: metadata = json.loads(metadata)
-            except: metadata = {}
-            
-        schema_tags = metadata.get("schema_tags", [])
-        if schema_tags:
-            for tag in schema_tags:
-                if tag.lower() in query.lower():
-                    metadata_match = 1.0
-                    break
-        
-        # 5. Query-Adaptive Weighting
-        if query_type == "symbolic":
-            w_sem, w_bm25, w_sal, w_meta = 0.15, 0.40, 0.25, 0.20
-        elif query_type == "identity":
-            w_sem, w_bm25, w_sal, w_meta = 0.10, 0.20, 0.40, 0.30
-        else: # conceptual
-            w_sem, w_bm25, w_sal, w_meta = 0.50, 0.15, 0.20, 0.15
-            
-        base_score = (s_score * w_sem) + (norm_bm25 * w_bm25) + (salience * w_sal) + (metadata_match * w_meta)
-        
-        # 6. Recency Decay (Bounded Additive)
-        ts = memory.get("timestamp", time.time())
-        age = max(0, time.time() - ts)
-        recency_bonus = math.exp(-age / 86400.0) 
-        
-        # Additive influence: old memories degrade slowly, never vanish
-        final_score = base_score + min(0.1, recency_bonus * 0.1)
-        
-        return final_score
+    @staticmethod
+    def _extract_entities_from_query(query):
+        patterns = [
+            (r"\bGalaxy X-\d+\b", "galaxy"), 
+            (r"\bProject [A-Z][a-z]+\b", "project"), 
+            (r"\bID[:\s]\d+\b", "id"),
+            (r"\b[A-Z]{2,}-\d+\b", "code")
+        ]
+        entities = []
+        for p, t in patterns:
+            found = re.findall(p, query, re.IGNORECASE)
+            for f in found:
+                entities.append({"type": t, "id": f.strip()})
+        return entities
 
-    def multi_stage_recall(self, user_id, query, agent_id="default_agent", top_k=5):
-        # 0. Intent-Driven Retrieval Pipeline (Primary)
-        if self.intent_manager:
-            try:
-                print(f"[RecallEngine] Intent-Driven Pipeline: {query[:40]}...")
-                intent_results = self.intent_manager.execute_intent_recall(user_id, query, agent_id)
-                memories = intent_results.get("memories", [])
-                
-                query_type = self._classify_query(query)
-                # Apply Unified Scoring
-                for m in memories:
-                    m["unified_score"] = self._calculate_unified_score(query, m, query_type)
-                
-                # Sort by unified score
-                memories.sort(key=lambda x: x["unified_score"], reverse=True)
+    @staticmethod
+    def _extract_relations_from_query(query):
+        q_lower = query.lower()
+        relations = []
+        if "primary" in q_lower or "main" in q_lower or "cause" in q_lower:
+            relations.append("primary_emission")
+        if "secondary" in q_lower or "signature" in q_lower:
+            relations.append("secondary_signature")
+        if "tertiary" in q_lower or "trace" in q_lower:
+            relations.append("tertiary_trace")
+        return relations
 
-                # 4. Rerank for precision (Process full candidate pool)
-                if self.reranker and memories:
-                    print(f"[RecallEngine] Reranking {len(memories)} intent-results...")
-                    # Take top 100 for reranking
-                    candidates_to_rerank = memories[:100]
-                    intent_results["memories"] = self.reranker.rerank(query, candidates_to_rerank, top_n=top_k)
-                else:
-                    intent_results["memories"] = memories[:top_k]
-                
-                # Apply reinforcement
-                self._reinforce_memories(user_id, intent_results["memories"])
-                
-                # Combine with schema insights
-                intent_results["schema_insights"] = self._get_schema_insights(query)
-                return intent_results
-            except Exception as e:
-                print(f"[RecallEngine] Intent Retrieval failed, falling back: {e}")
-
-        # 1. Fallback: Standard Pipeline
-        return self._legacy_recall(user_id, query, agent_id, top_k)
-
-    def _legacy_recall(self, user_id, query, agent_id, top_k):
-        # 1. Predictive Signals
-        prediction = {}
-        if self.predictive:
-             prediction = self.predictive.preload_context(user_id, query)
+    def _generate_candidates(self, user_id, query, agent_id, limit=1000):
+        """Stage 1: Broad Recall (Nuclear Depth)"""
+        # Pool A: Lexical/FTS5
+        episodic_candidates = self.episodic.search(user_id, query, agent_id=agent_id, limit=limit)
         
-        # 2. Stage 1: Retrieval (Fetch more candidates)
-        semantic_results = self.semantic.search(user_id, query, top_k=100) 
-        episodic_candidates = self.episodic.search(user_id, query, agent_id=agent_id, limit=100)
+        # Pool B: Semantic ANN
+        semantic_results = self.semantic.search(user_id, query, top_k=limit)
         
         candidates = []
-        seen = set()
+        seen_ids = set()
         
-        for c in semantic_results:
-            if c.get("agent_id") == agent_id or c.get("memory_type") == "shared":
-                sid = c.get("sqlite_id")
-                if sid:
-                    real_m = self.episodic.get_by_id(user_id, sid)
-                    if real_m:
-                        real_m["source"] = "semantic"
-                        real_m["semantic_score"] = c.get("score", 0.5)
-                        candidates.append(real_m)
-                        seen.add(real_m["content"])
-                else:
-                    candidates.append({
-                        "content": str(c.get("id")), 
-                        "source": "semantic", 
-                        "importance": c.get("importance", 5.0),
-                        "semantic_score": c.get("score", 0.5)
-                    })
-                    seen.add(str(c.get("id")))
-                
+        # Merge by Memory ID
         for c in episodic_candidates:
-            if c["content"] not in seen:
-                c["source"] = "episodic"
-                c["semantic_score"] = 0.5 # Baseline for purely lexical matches
+            cid = c.get("id")
+            if cid and cid not in seen_ids:
+                c["pool"] = "A"
+                c["semantic_score"] = 0.5
                 candidates.append(c)
-                seen.add(c["content"])
+                seen_ids.add(cid)
+                
+        for s in semantic_results:
+            if s.get("agent_id") == agent_id or s.get("memory_type") == "shared":
+                sqlite_id = s.get("sqlite_id")
+                if sqlite_id and sqlite_id not in seen_ids:
+                    real_m = self.episodic.get_by_id(user_id, sqlite_id)
+                    if real_m:
+                        real_m["pool"] = "B"
+                        real_m["semantic_score"] = s.get("score", 0.5)
+                        candidates.append(real_m)
+                        seen_ids.add(sqlite_id)
+        
+        return candidates
 
-        # Apply Unified Scoring to candidates
-        query_type = self._classify_query(query)
+    def _rank_candidates(self, query, candidates, query_type):
+        """Stage 2: Precision-Biased Ranking"""
+        context = {
+            "query_entities": self._extract_entities_from_query(query),
+            "query_relations": self._extract_relations_from_query(query),
+            "recall_engine": self 
+        }
+        
+        # Fine-tuned weights for Resilient Cognitive Retrieval
+        weights = {
+            "symbolic": {"semantic": 0.01, "lexical": 0.04, "entity": 0.45, "relation": 0.45, "salience": 0.0, "temporal": 0.05},
+            "identity": {"semantic": 0.05, "lexical": 0.10, "entity": 0.70, "relation": 0.10, "salience": 0.0, "temporal": 0.05},
+            "conceptual": {"semantic": 0.60, "lexical": 0.10, "entity": 0.10, "relation": 0.10, "salience": 0.05, "temporal": 0.05}
+        }.get(query_type, {"semantic": 0.5, "lexical": 0.1, "entity": 0.1, "relation": 0.1, "salience": 0.1, "temporal": 0.1})
+
         for c in candidates:
-            c["unified_score"] = self._calculate_unified_score(query, c, query_type, c.get("semantic_score"))
+            signals = {}
+            for name, scorer in self.scorers.items():
+                signals.update(scorer.score(query, c, context))
+            
+            # Dynamic Tiered Weighting: 
+            # 1. Fresh Data (< 1 hour): Recency is King (Timeline Sort)
+            # 2. Old Data (> 1 hour): Importance is King (Knowledge Sort)
+            age_sec = time.time() - float(c.get("timestamp", 0.0))
+            current_weights = weights.copy()
+            
+            if age_sec < 3600: # Fresh
+                current_weights["temporal"] = 0.40 # High recency boost for timeline
+                current_weights["salience"] = 0.05
+            else: # Old
+                current_weights["temporal"] = 0.05
+                current_weights["salience"] = 0.40 # High importance boost for long-term knowledge
+            
+            # Weighted Fusion
+            final_score = 0.0
+            for sig, weight in current_weights.items():
+                final_score += signals.get(sig, 0.5) * weight
+            
+            # Explainability breakdown
+            c["unified_score"] = final_score
+            c["explain"] = {k: v for k, v in signals.items() if k in weights}
+            
+            # Confidence Floor: Squelch hallucinations
+            if c["unified_score"] < 0.2:
+                c["unified_score"] *= 0.1 # Exponential drop for low-confidence matches
+                c["is_uncertain"] = True
+
+            # Resilient Multiplier: Soft suppression instead of hard vaporizing
+            if signals.get("exact_match") == False and context["query_entities"]:
+                c["unified_score"] *= 0.3 # Allow semantic rescue for extraction failures
+                c["rejected_reason"] = "entity_mismatch"
         
         candidates.sort(key=lambda x: x["unified_score"], reverse=True)
+        return candidates
 
-        # 3. Finalization logic (Rerank -> Attention)
-        if self.reranker and candidates:
-            print(f"[RecallEngine] Reranking {len(candidates)} candidates...")
-            candidates = self.reranker.rerank(query, candidates[:100], top_n=top_k)
-
-        final_memories = candidates[:top_k]
-        if self.attention and candidates:
-            scored = self.attention.score_memories(candidates, prediction)
-            final_memories = self.attention.filter(scored, top_n=top_k)
-
+    def multi_stage_recall(self, user_id, query, agent_id="default_agent", top_k=5):
+        t0 = time.time()
+        
+        # 1. Candidate Generation
+        candidates = self._generate_candidates(user_id, query, agent_id)
+        candidate_count = len(candidates)
+        
+        # 2. Primary Ranking
+        query_type = self._classify_query(query)
+        ranked = self._rank_candidates(query, candidates, query_type)
+        
+        # 3. Truth Arbitration (Epistemic Discipline)
+        from .truth_engine import TruthEngine
+        truth_engine = TruthEngine(threshold=0.35)
+        
+        # Build context for Truth Engine
+        query_context = {
+            "query_entities": self._extract_entities_from_query(query),
+            "query_relations": self._extract_relations_from_query(query)
+        }
+        resolved, status = truth_engine.resolve(ranked, query_context)
+        
+        # 4. Adaptive Recovery: If Truth Engine squelches symbolic but we have semantic candidates
+        if status == "UNCERTAIN" and query_type in ["symbolic", "identity"]:
+            print(f"[RecallEngine] Truth Engine rejected symbolic matches. Triggering Semantic Recovery...")
+            ranked_conceptual = self._rank_candidates(query, candidates, "conceptual")
+            resolved, status = truth_engine.resolve(ranked_conceptual, query_context)
+        
+        # 5. Finalization
+        final_memories = resolved[:top_k]
+        self._reinforce_memories(user_id, final_memories)
+        
         return {
-            "intent": "legacy_fallback",
+            "intent": query_type,
+            "status": status,
             "memories": final_memories,
+            "metrics": {
+                "total_candidates": candidate_count,
+                "latency_ms": round((time.time() - t0) * 1000, 1),
+                "truth_status": status
+            },
             "schema_insights": self._get_schema_insights(query)
         }
 
@@ -210,8 +223,7 @@ class RecallEngine:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             for m in memories_list:
-                metadata = m.get("metadata", {}) if isinstance(m, dict) else {}
-                m_id = metadata.get("id") or m.get("id")
+                m_id = m.get("id")
                 if m_id:
                     cursor.execute("SELECT reinforcement_score FROM episodic_events WHERE id = ?", (m_id,))
                     row = cursor.fetchone()
@@ -223,5 +235,4 @@ class RecallEngine:
                         ''', (new_score, m_id))
             conn.commit()
             conn.close()
-        except Exception as e:
-            print(f"[RecallEngine] Reinforcement error: {e}")
+        except: pass

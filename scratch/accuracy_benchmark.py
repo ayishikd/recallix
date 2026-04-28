@@ -24,12 +24,14 @@ def run_accuracy_benchmark():
     requests.post("http://127.0.0.1:8000/internal/clear", json={"user_id": TEST_USER}, headers=HEADERS)
 
     print(f"🚀 Starting Memory Accuracy Benchmark...")
-    print(f"📥 Storing 100 facts (Audit Mode: HIGH SPEED)...")
+    print(f"📥 Storing {len(FACTS)} facts (Audit Mode: HIGH SPEED)...")
     
     start_time = time.time()
-    for fact in FACTS:
-        requests.post(f"{API_URL}/store", json={"content": fact, "user_id": TEST_USER, "skip_llm": True}, headers=HEADERS)
+    for f in FACTS:
+        requests.post(f"{API_URL}/store", json={"user_id": TEST_USER, "content": f, "skip_llm": True}, headers=HEADERS)
     
+    print("⏳ Cooling Period: Finalizing Indexes...")
+    time.sleep(5)
     end_time = time.time()
     print(f"✅ 100 facts stored in {end_time - start_time:.2f} seconds.")
 
@@ -58,8 +60,12 @@ def run_accuracy_benchmark():
             elif found_rank > 1:
                 recall_at_5 += 1
                 print(f"   ⚠️ [R@{found_rank}] Galaxy X-{idx} -> {expected_process} (Ranked Low)")
+                print(f"      Explain: {mems[found_rank-1].get('explain')}")
             else:
                 print(f"   ❌ [MISS] Galaxy X-{idx}")
+                if mems:
+                    print(f"      Top Rank Explain: {mems[0].get('explain')}")
+                    print(f"      Top Rank Content: {mems[0].get('content')}")
             
             if found_rank != -1:
                 mrr_sum += 1.0 / found_rank

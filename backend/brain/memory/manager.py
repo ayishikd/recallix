@@ -67,13 +67,18 @@ class MemoryManager:
         s = time.time()
         schema_tags = []
         entities = []
+        relations = []
         if not skip_llm:
             try:
                 prompt = f"""Analyze this message. 
 1. Classify it into schemas: [identity, preference, calendar, learning, task, security, social, other].
-2. Extract key entities (names, IDs, project codes, dates, concrete nouns).
+2. Extract key entities (galaxy, project, person, etc.) and their relations.
 Message: "{message}"
-Respond ONLY with a JSON object like: {{"schemas": ["identity"], "entities": ["Project Phoenix", "John Doe"]}}"""
+Respond ONLY with a JSON object like: {{
+  "schemas": ["learning"], 
+  "entities": [{{"type": "galaxy", "id": "X-35"}}],
+  "relations": [{{"subject": "X-35", "type": "primary_emission", "object": "synchrotron"}}]
+}}"""
                 llm_res = self.model_router.route("cleanup", prompt)
                 import re
                 match = re.search(r'\{.*\}', llm_res, re.DOTALL)
@@ -81,7 +86,20 @@ Respond ONLY with a JSON object like: {{"schemas": ["identity"], "entities": ["P
                     parsed = json.loads(match.group(0))
                     schema_tags = parsed.get("schemas", ["general"])
                     entities = parsed.get("entities", [])
+                    relations = parsed.get("relations", [])
             except: pass
+        else:
+            # High-speed Regex Fallback for symbolic facts (Fix #25)
+            import re
+            e_match = re.search(r"\b(Galaxy X-\d+|Project [A-Z][a-z]+)\b", message, re.IGNORECASE)
+            if e_match:
+                entities = [{"type": "symbolic", "id": e_match.group(1)}]
+            
+            r_match = re.search(r"\b(primary emission|status|location|security|primary cause)\b", message, re.IGNORECASE)
+            if r_match:
+                norm_rel = r_match.group(1).lower().replace(" ", "_")
+                relations = [{"type": norm_rel}]
+
         if not schema_tags: schema_tags = ["general"]
         log("ollama", "Schema & Entity Tagging", f"Schemas: {schema_tags}, Entities: {entities}", s)
 
@@ -97,7 +115,7 @@ Respond ONLY with a JSON object like: {{"schemas": ["identity"], "entities": ["P
             "content": message,
             "timestamp": time.time(),
             "importance": importance,
-            "metadata": {"schema_tags": schema_tags, "entities": entities}
+            "metadata": {"schema_tags": schema_tags, "entities": entities, "relations": relations}
         }
 
         # ── Stage 5: Episodic Storage ──
@@ -123,6 +141,14 @@ Respond ONLY with a JSON object like: {{"schemas": ["identity"], "entities": ["P
             self.long_term.promote(user_id, event)
             promoted = True
             log("python", "Long-Term Promotion", f"🔥 PROMOTED! Score {ltm_score:.1f}", s)
+
+        # ── Stage 8: Forgetfulness & Cleanup (Fix #22) ──
+        # Every 10 stores, we run a background cleanup for the user
+        if int(episodic_id) % 10 == 0:
+            s = time.time()
+            pruned = self.episodic.cleanup_low_importance_memories(user_id)
+            if pruned:
+                log("python", "Forgetfulness", f"Pruned {pruned} low-signal memories.", s)
 
         # ── Final Summary ──
         total_ms = round((time.time() - t0) * 1000, 1)

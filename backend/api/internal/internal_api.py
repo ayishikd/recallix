@@ -27,6 +27,8 @@ async def clear_system_memory(request: ClearRequest):
                      cursor.execute("DELETE FROM episodic_events")
                      cursor.execute("DELETE FROM episodic_fts")
                 else:
+                    # Clear both events and the FTS index for the user
+                    cursor.execute("DELETE FROM episodic_fts WHERE content_id IN (SELECT id FROM episodic_events WHERE user_id = ?)", (request.user_id,))
                     cursor.execute("DELETE FROM episodic_events WHERE user_id = ?", (request.user_id,))
                 conn.commit()
 

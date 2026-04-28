@@ -13,11 +13,14 @@
 struct HNSWNode {
     int id;
     int max_layer;
-    std::vector<int> neighbors[8];
+    int neighbors[8][16]; // Fixed max neighbors per layer for performance
     int neighbor_counts[8];
 
     HNSWNode(int _id) : id(_id), max_layer(0) {
-        for (int i = 0; i < 8; ++i) neighbor_counts[i] = 0;
+        for (int i = 0; i < 8; ++i) {
+            neighbor_counts[i] = 0;
+            for (int j = 0; j < 16; ++j) neighbors[i][j] = -1;
+        }
     }
 };
 
@@ -64,6 +67,7 @@ private:
     void backgroundWorkerLoop();
 
     const int MAX_LAYERS = 8;
+    const int MAX_NEIGHBORS = 16;
 };
 
 const char* getSIMDBackend();

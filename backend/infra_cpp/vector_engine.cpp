@@ -426,7 +426,11 @@ void VectorEngine::backgroundWorkerLoop() {
         }
         if (node_to_index != -1) {
             try {
-                insertHNSW(node_to_index);
+                std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+                // Verify node still exists and isn't deleted before indexing
+                if (node_to_index < (int)nodes_.size() && deleted_nodes_.find(node_to_index) == deleted_nodes_.end()) {
+                    insertHNSW(node_to_index);
+                }
             } catch (const std::exception& e) {
                 std::cerr << "Indexing Error: " << e.what() << std::endl;
             }
