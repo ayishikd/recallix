@@ -63,22 +63,27 @@ class MemoryManager:
         self.working.update(user_id, message)
         log("python", "Working Memory", f"Updated with sliding window.", s)
 
-        # ── Stage 3: Schema Tagging (Fix #10: LLM-Assisted) ──
+        # ── Stage 3: Schema & Entity Extraction (Structured Memory) ──
         s = time.time()
         schema_tags = []
+        entities = []
         if not skip_llm:
             try:
-                prompt = f"""Classify this message into cognitive schemas: [identity, preference, calendar, learning, task, security, social, other].
+                prompt = f"""Analyze this message. 
+1. Classify it into schemas: [identity, preference, calendar, learning, task, security, social, other].
+2. Extract key entities (names, IDs, project codes, dates, concrete nouns).
 Message: "{message}"
-Respond ONLY with a JSON array like ["identity", "preference"]."""
+Respond ONLY with a JSON object like: {{"schemas": ["identity"], "entities": ["Project Phoenix", "John Doe"]}}"""
                 llm_res = self.model_router.route("cleanup", prompt)
                 import re
-                match = re.search(r'\[.*\]', llm_res)
+                match = re.search(r'\{.*\}', llm_res, re.DOTALL)
                 if match:
-                    schema_tags = json.loads(match.group(0))
+                    parsed = json.loads(match.group(0))
+                    schema_tags = parsed.get("schemas", ["general"])
+                    entities = parsed.get("entities", [])
             except: pass
         if not schema_tags: schema_tags = ["general"]
-        log("ollama", "Schema Tagging", f"Detected: {schema_tags}", s)
+        log("ollama", "Schema & Entity Tagging", f"Schemas: {schema_tags}, Entities: {entities}", s)
 
         # ── Stage 4: Importance Scoring (Fix #11: LLM-Backed) ──
         s = time.time()
@@ -92,7 +97,7 @@ Respond ONLY with a JSON array like ["identity", "preference"]."""
             "content": message,
             "timestamp": time.time(),
             "importance": importance,
-            "metadata": {"schema_tags": schema_tags}
+            "metadata": {"schema_tags": schema_tags, "entities": entities}
         }
 
         # ── Stage 5: Episodic Storage ──

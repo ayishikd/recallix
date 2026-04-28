@@ -26,7 +26,8 @@ class EpisodicMemory:
                 timestamp REAL,
                 importance REAL,
                 reinforcement_score REAL DEFAULT 1.0,
-                retrieval_count INTEGER DEFAULT 0
+                retrieval_count INTEGER DEFAULT 0,
+                metadata TEXT
             )
         ''')
         
@@ -42,9 +43,9 @@ class EpisodicMemory:
         cursor.execute("PRAGMA journal_mode=WAL")
         
         cursor.execute('''
-            INSERT INTO episodic_events (user_id, agent_id, memory_type, content, timestamp, importance)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (event["user_id"], event["agent_id"], event["memory_type"], event["content"], event["timestamp"], event["importance"]))
+            INSERT INTO episodic_events (user_id, agent_id, memory_type, content, timestamp, importance, metadata)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (event["user_id"], event["agent_id"], event["memory_type"], event["content"], event["timestamp"], event["importance"], json.dumps(event.get("metadata", {}))))
         
         row_id = cursor.lastrowid
         
@@ -63,10 +64,11 @@ class EpisodicMemory:
         cursor = conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         
-        # Lexical search via FTS5
+        # Lexical search via FTS5 with BM25 scoring
         fts_query = ' OR '.join(query.split())
         sql = '''
-            SELECT e.* FROM episodic_events e
+            SELECT e.*, bm25(episodic_fts) as bm25_score 
+            FROM episodic_events e
             JOIN episodic_fts f ON e.id = f.content_id
             WHERE e.user_id = ? AND f.content MATCH ?
         '''
@@ -76,8 +78,7 @@ class EpisodicMemory:
             sql += " AND (e.agent_id = ? OR e.memory_type = 'shared')"
             params.append(agent_id)
             
-        # Hybrid Ranking (Fix #3 from accuracy audit)
-        sql += " ORDER BY (e.importance * 0.7 + e.reinforcement_score * 0.3) DESC LIMIT ?"
+        sql += " ORDER BY bm25_score ASC LIMIT ?" # bm25() returns negative values (more negative = better match)
         params.append(limit)
         
         cursor.execute(sql, params)
@@ -85,10 +86,16 @@ class EpisodicMemory:
         
         results = []
         for r in rows:
+            # BM25 is negative in SQLite, we convert to positive float and normalize roughly
+            raw_bm25 = r[10]
+            bm25_positive = abs(raw_bm25) if raw_bm25 else 0.0
+            
             results.append({
                 "id": r[0], "user_id": r[1], "agent_id": r[2],
                 "memory_type": r[3], "content": r[4], "timestamp": r[5],
-                "importance": r[6], "reinforcement_score": r[7]
+                "importance": r[6], "reinforcement_score": r[7],
+                "metadata": r[9], # r[8] is retrieval_count
+                "bm25_score": bm25_positive
             })
         conn.close()
         return results
@@ -104,6 +111,7 @@ class EpisodicMemory:
             return {
                 "id": r[0], "user_id": r[1], "agent_id": r[2],
                 "memory_type": r[3], "content": r[4], "timestamp": r[5],
-                "importance": r[6], "reinforcement_score": r[7]
+                "importance": r[6], "reinforcement_score": r[7],
+                "metadata": r[9] # r[8] is retrieval_count
             }
         return None

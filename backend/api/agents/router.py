@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from backend.brain.memory.manager import MemoryManager
 from typing import List, Optional
 from backend.api.middleware.auth import verify_api_key
-from backend.brain.memory.manager import MemoryManager
+from backend.api.deps import get_memory_manager
 import time
 
 router = APIRouter(prefix="/agents", tags=["Multi-Agent Memory API"])
-memory_manager = MemoryManager()
 
 class AgentStoreRequest(BaseModel):
     content: str
@@ -20,7 +20,7 @@ class AgentRecallRequest(BaseModel):
     limit: Optional[int] = 10
 
 @router.post("/store")
-async def store_agent_memory(request: AgentStoreRequest, auth=Depends(verify_api_key)):
+async def store_agent_memory(request: AgentStoreRequest, auth=Depends(verify_api_key), memory_manager: MemoryManager = Depends(get_memory_manager)):
     """
     Dedicated endpoint for agents to store memories with specific agent context.
     """
@@ -44,7 +44,7 @@ async def store_agent_memory(request: AgentStoreRequest, auth=Depends(verify_api
     }
 
 @router.post("/recall")
-async def recall_agent_memory(request: AgentRecallRequest, auth=Depends(verify_api_key)):
+async def recall_agent_memory(request: AgentRecallRequest, auth=Depends(verify_api_key), memory_manager: MemoryManager = Depends(get_memory_manager)):
     """
     Dedicated endpoint for agents to retrieve memories (private + shared).
     """

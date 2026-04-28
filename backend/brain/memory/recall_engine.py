@@ -23,35 +23,74 @@ class RecallEngine:
         self.attention = None 
         self.reranker = None 
 
-    def _calculate_unified_score(self, query, memory, semantic_score=None):
+    def _classify_query(self, query):
+        q_lower = query.lower()
+        symbolic_triggers = ["what is", "who is", "name", "id", "code", "deadline", "date", "when", "where", "project", "number"]
+        identity_triggers = ["my name", "i am", "who am i", "my cat", "my dog", "my preference", "i like"]
+        
+        if any(t in q_lower for t in identity_triggers):
+            return "identity"
+        elif any(t in q_lower for t in symbolic_triggers):
+            return "symbolic"
+        return "conceptual"
+
+    def _calculate_unified_score(self, query, memory, query_type="conceptual", semantic_score=None):
         """
-        Fix #3: Unified Scoring Function
-        semantic_similarity * 0.45 + lexical_overlap * 0.20 + importance * 0.20 + reinforcement * 0.10 + recency_decay * 0.05
+        Fix #3: Unified Scoring Function with Query-Adaptive Weighting
         """
         content = memory.get("content", "").lower()
-        q_lower = query.lower()
         
-        # 1. Lexical Overlap (Simple Jaccard-ish)
-        q_words = set(q_lower.split())
-        c_words = set(content.split())
-        overlap = len(q_words.intersection(c_words)) / max(len(q_words), 1)
+        # 1. Lexical (BM25 from FTS5)
+        bm25 = memory.get("bm25_score", 0.0)
+        if bm25 == 0.0:
+            q_words = set(query.lower().split())
+            c_words = set(content.split())
+            overlap = len(q_words.intersection(c_words)) / max(len(q_words), 1)
+            bm25 = overlap * 5.0 # Rough approximation to scale it up
+            
+        # Normalize BM25 roughly to 0-1 range for the formula (assume max typical score ~10.0)
+        norm_bm25 = min(bm25 / 10.0, 1.0)
         
-        # 2. Importance (Scaled 0-1)
+        # 2. Salience (Importance + Reinforcement)
         importance = float(memory.get("importance", 5.0)) / 10.0
-        
-        # 3. Reinforcement (Scaled 0-1)
         reinforcement = float(memory.get("reinforcement_score", 1.0)) / 10.0
+        salience = (importance * 0.7) + (reinforcement * 0.3)
         
-        # 4. Recency Decay (Exponential decay based on timestamp)
-        # We assume timestamp is unix epoch. Half-life of 24 hours (86400s)
-        ts = memory.get("timestamp", time.time())
-        age = max(0, time.time() - ts)
-        recency = math.exp(-age / 86400.0) 
-        
-        # 5. Semantic Score (provided by SemanticMemory if available)
+        # 3. Semantic Score
         s_score = semantic_score if semantic_score is not None else 0.5
         
-        final_score = (s_score * 0.45) + (overlap * 0.20) + (importance * 0.20) + (reinforcement * 0.10) + (recency * 0.05)
+        # 4. Metadata / Entity Overlap
+        metadata_match = 0.0
+        metadata = memory.get("metadata", {})
+        if isinstance(metadata, str):
+            try: metadata = json.loads(metadata)
+            except: metadata = {}
+            
+        schema_tags = metadata.get("schema_tags", [])
+        if schema_tags:
+            for tag in schema_tags:
+                if tag.lower() in query.lower():
+                    metadata_match = 1.0
+                    break
+        
+        # 5. Query-Adaptive Weighting
+        if query_type == "symbolic":
+            w_sem, w_bm25, w_sal, w_meta = 0.15, 0.40, 0.25, 0.20
+        elif query_type == "identity":
+            w_sem, w_bm25, w_sal, w_meta = 0.10, 0.20, 0.40, 0.30
+        else: # conceptual
+            w_sem, w_bm25, w_sal, w_meta = 0.50, 0.15, 0.20, 0.15
+            
+        base_score = (s_score * w_sem) + (norm_bm25 * w_bm25) + (salience * w_sal) + (metadata_match * w_meta)
+        
+        # 6. Recency Decay (Bounded Additive)
+        ts = memory.get("timestamp", time.time())
+        age = max(0, time.time() - ts)
+        recency_bonus = math.exp(-age / 86400.0) 
+        
+        # Additive influence: old memories degrade slowly, never vanish
+        final_score = base_score + min(0.1, recency_bonus * 0.1)
+        
         return final_score
 
     def multi_stage_recall(self, user_id, query, agent_id="default_agent", top_k=5):
@@ -62,9 +101,10 @@ class RecallEngine:
                 intent_results = self.intent_manager.execute_intent_recall(user_id, query, agent_id)
                 memories = intent_results.get("memories", [])
                 
+                query_type = self._classify_query(query)
                 # Apply Unified Scoring
                 for m in memories:
-                    m["unified_score"] = self._calculate_unified_score(query, m)
+                    m["unified_score"] = self._calculate_unified_score(query, m, query_type)
                 
                 # Sort by unified score
                 memories.sort(key=lambda x: x["unified_score"], reverse=True)
@@ -130,8 +170,9 @@ class RecallEngine:
                 seen.add(c["content"])
 
         # Apply Unified Scoring to candidates
+        query_type = self._classify_query(query)
         for c in candidates:
-            c["unified_score"] = self._calculate_unified_score(query, c, c.get("semantic_score"))
+            c["unified_score"] = self._calculate_unified_score(query, c, query_type, c.get("semantic_score"))
         
         candidates.sort(key=lambda x: x["unified_score"], reverse=True)
 

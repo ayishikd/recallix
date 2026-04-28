@@ -145,6 +145,43 @@ void VectorEngine::removeVector(const std::string& id) {
             break;
         }
     }
+    
+    if (!store_.empty() && (float)deleted_nodes_.size() / store_.size() > 0.25f) {
+        std::cout << "[VectorEngine] Tombstone threshold reached. Rebuilding HNSW graph..." << std::endl;
+        rebuildIndex();
+    }
+}
+
+void VectorEngine::rebuildIndex() {
+    // This assumes engine_mutex_ is already locked by the caller (removeVector)
+    std::vector<std::vector<float>> new_store;
+    std::vector<std::string> new_id_map;
+    
+    new_store.reserve(store_.size() - deleted_nodes_.size());
+    new_id_map.reserve(id_map_.size() - deleted_nodes_.size());
+    
+    for (size_t i = 0; i < store_.size(); ++i) {
+        if (deleted_nodes_.find(i) == deleted_nodes_.end()) {
+            new_store.push_back(store_[i]);
+            new_id_map.push_back(id_map_[i]);
+        }
+    }
+    
+    // Clear and re-initialize
+    store_ = std::move(new_store);
+    id_map_ = std::move(new_id_map);
+    deleted_nodes_.clear();
+    
+    for (auto node : nodes_) delete node;
+    nodes_.clear();
+    entry_point_id_ = -1;
+    
+    // Re-index all vectors
+    for (size_t i = 0; i < store_.size(); ++i) {
+        nodes_.push_back(new HNSWNode(i));
+        insertHNSW(i);
+    }
+    std::cout << "[VectorEngine] HNSW graph rebuilt with " << store_.size() << " nodes." << std::endl;
 }
 
 bool VectorEngine::saveSnapshot(const std::string& path) {
@@ -359,10 +396,9 @@ VectorEngine::~VectorEngine() {
 void VectorEngine::addVector(const std::vector<float>& vec, const std::string& id) {
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     
-    // Fix #8: Enforce dimensionality consistency
+    // Fix #8: Enforce dimensionality consistency (Fail-fast)
     if (!store_.empty() && vec.size() != store_[0].size()) {
-        std::cerr << "⚠️ Dimension mismatch: expected " << store_[0].size() << ", got " << vec.size() << std::endl;
-        return;
+        throw std::invalid_argument("Dimension mismatch: expected " + std::to_string(store_[0].size()) + ", got " + std::to_string(vec.size()));
     }
 
     std::vector<float> norm_vec = vec;

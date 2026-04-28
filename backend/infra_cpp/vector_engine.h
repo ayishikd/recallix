@@ -33,6 +33,7 @@ public:
     void normalizeVector(std::vector<float>& vec);
     void insertHNSW(int node_idx);
     void removeVector(const std::string& id);
+    void rebuildIndex();
     bool saveSnapshot(const std::string& path);
     bool loadSnapshot(const std::string& path);
 

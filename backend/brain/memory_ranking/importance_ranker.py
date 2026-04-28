@@ -34,7 +34,7 @@ Message: "{content}"
 Context: "{context_summary[:200]}"
 Respond ONLY with a JSON object like {{"score": 7.5, "reason": "..."}}"""
                 
-                llm_res = model_router.fast_model(prompt)
+                llm_res = model_router.route("cleanup", prompt)
                 if llm_res:
                     # Basic JSON extraction
                     import re

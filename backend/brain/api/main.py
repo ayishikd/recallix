@@ -3,8 +3,10 @@ from pydantic import BaseModel
 from ..memory.manager import MemoryManager
 from ..utils.background_worker import BackgroundWorker
 
+from backend.api.deps import get_memory_manager
+
 app = FastAPI()
-memory = MemoryManager()
+memory = get_memory_manager()
 worker = BackgroundWorker(memory)
 
 @app.on_event("startup")
