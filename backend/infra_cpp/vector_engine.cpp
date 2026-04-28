@@ -282,8 +282,7 @@ void VectorEngine::insertHNSW(int node_idx) {
             changed = false;
             float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
             HNSWNode* curr_node = nodes_[curr_node_idx];
-            for (int i = 0; i < curr_node->neighbor_counts[l]; ++i) {
-                int neighbor = curr_node->neighbors[l][i];
+            for (int neighbor : curr_node->neighbors[l]) {
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
@@ -301,7 +300,7 @@ void VectorEngine::insertHNSW(int node_idx) {
     }
     current_version++;
 
-    const int efConstruction = 100;
+    int efConstruction = efConstruction_;
     for (int l = std::min(target_layer, (int)MAX_LAYERS - 1); l >= 0; --l) {
         std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k;
         std::priority_queue<std::pair<float, int>> candidates;
@@ -317,8 +316,7 @@ void VectorEngine::insertHNSW(int node_idx) {
             if (top_k.size() >= (size_t)efConstruction && dist < top_k.top().first) break;
 
             HNSWNode* node_c = nodes_[c];
-            for (int i = 0; i < node_c->neighbor_counts[l]; ++i) {
-                int neighbor = node_c->neighbors[l][i];
+            for (int neighbor : node_c->neighbors[l]) {
                 if (visited_flags[neighbor] != current_version) {
                     visited_flags[neighbor] = current_version;
                     float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
@@ -338,7 +336,6 @@ void VectorEngine::insertHNSW(int node_idx) {
         }
         std::sort(layer_results.begin(), layer_results.end(), std::greater<>());
         curr_node_idx = layer_results[0].second;
-
         {
             std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
             for (auto& [sim, nbr] : layer_results) {
@@ -346,37 +343,28 @@ void VectorEngine::insertHNSW(int node_idx) {
                 HNSWNode* node_self = nodes_[node_idx];
                 HNSWNode* node_nbr = nodes_[nbr];
 
+                // Add nbr to self
+                if (node_self->neighbors[l].size() < (size_t)M_) {
+                    node_self->neighbors[l].push_back(nbr);
+                }
+
+                // Add self to nbr (bidirectional)
                 bool exists = false;
-                for (int i = 0; i < node_self->neighbor_counts[l]; ++i) {
-                    if (node_self->neighbors[l][i] == nbr) { exists = true; break; }
-                }
-
-                if (!exists && node_self->neighbor_counts[l] < 16) {
-                    node_self->neighbors[l][node_self->neighbor_counts[l]++] = nbr;
-                }
-                
-                exists = false;
-                for (int i = 0; i < node_nbr->neighbor_counts[l]; ++i) {
-                    if (node_nbr->neighbors[l][i] == node_idx) { exists = true; break; }
-                }
-
+                for (int n : node_nbr->neighbors[l]) if (n == node_idx) { exists = true; break; }
                 if (!exists) {
-                    if (node_nbr->neighbor_counts[l] < 16) {
-                        node_nbr->neighbors[l][node_nbr->neighbor_counts[l]++] = node_idx;
-                    } else {
-                        int worst_idx = -1;
-                        float worst_sim = 1e9f;
-                        for (int i = 0; i < 16; ++i) {
-                            int existing_nbr = node_nbr->neighbors[l][i];
-                            float s = dot_product_simd(store_[nbr].data(), store_[existing_nbr].data(), store_[nbr].size());
-                            if (s < worst_sim) {
-                                worst_sim = s;
-                                worst_idx = i;
-                            }
+                    node_nbr->neighbors[l].push_back(node_idx);
+                    if (node_nbr->neighbors[l].size() > (size_t)M_) {
+                        // Keep only best M
+                        std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> neighbors_heap;
+                        for (int n : node_nbr->neighbors[l]) {
+                            float s = dot_product_simd(store_[nbr].data(), store_[n].data(), store_[nbr].size());
+                            neighbors_heap.push({s, n});
+                            if (neighbors_heap.size() > (size_t)M_) neighbors_heap.pop();
                         }
-                        float new_sim = dot_product_simd(store_[nbr].data(), store_[node_idx].data(), store_[nbr].size());
-                        if (new_sim > worst_sim) {
-                            node_nbr->neighbors[l][worst_idx] = node_idx;
+                        node_nbr->neighbors[l].clear();
+                        while (!neighbors_heap.empty()) {
+                            node_nbr->neighbors[l].push_back(neighbors_heap.top().second);
+                            neighbors_heap.pop();
                         }
                     }
                 }
@@ -392,11 +380,20 @@ void VectorEngine::insertHNSW(int node_idx) {
     }
 }
 
-VectorEngine::VectorEngine() : entry_point_id_(-1), max_id_(0), stop_worker_(false) {
+VectorEngine::VectorEngine(int M, int efConstruction, int efSearch) 
+    : entry_point_id_(-1), max_id_(0), stop_worker_(false), M_(M), efConstruction_(efConstruction), efSearch_default_(efSearch) {
     store_.reserve(1000000);
     id_map_.reserve(1000000);
     nodes_.reserve(1000000);
     worker_thread_ = std::thread(&VectorEngine::backgroundWorkerLoop, this);
+}
+
+void VectorEngine::reconfigure(int M, int efConstruction, int efSearch) {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    M_ = M;
+    efConstruction_ = efConstruction;
+    efSearch_default_ = efSearch;
+    std::cout << "[VectorEngine] Reconfigured: M=" << M_ << ", efConstruction=" << efConstruction_ << ", efSearch=" << efSearch_default_ << std::endl;
 }
 
 VectorEngine::~VectorEngine() {
@@ -455,11 +452,11 @@ void VectorEngine::backgroundWorkerLoop() {
     }
 }
 
-std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vector<float>& query_vec, int k) {
+std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vector<float>& query_vec, int k, int ef_search) {
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     if (entry_point_id_ == -1) return {};
 
-    int efSearch = 100; // Increased for Tier 2 precision
+    int efSearch = (ef_search > 0) ? ef_search : efSearch_default_;
     int curr_node_idx = entry_point_id_;
 
     for (int l = nodes_[entry_point_id_]->max_layer; l > 0; --l) {
@@ -468,8 +465,7 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
             changed = false;
             float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
             HNSWNode* curr_node = nodes_[curr_node_idx];
-            for (int i = 0; i < curr_node->neighbor_counts[l]; ++i) {
-                int neighbor = curr_node->neighbors[l][i];
+            for (int neighbor : curr_node->neighbors[l]) {
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());
                 if (sim > curr_sim) {
                     curr_node_idx = neighbor;
@@ -498,8 +494,7 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
         if (top_k.size() >= (size_t)efSearch && dist < top_k.top().first) break;
 
         HNSWNode* node_c = nodes_[c];
-        for (int i = 0; i < node_c->neighbor_counts[0]; ++i) {
-            int neighbor = node_c->neighbors[0][i];
+        for (int neighbor : node_c->neighbors[0]) {
             if (search_visited_flags[neighbor] != search_version) {
                 search_visited_flags[neighbor] = search_version;
                 float sim = dot_product_simd(query_vec.data(), store_[neighbor].data(), query_vec.size());

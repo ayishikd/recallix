@@ -24,6 +24,23 @@ int main() {
 
     httplib::Server svr;
 
+    // --- Configuration Endpoint ---
+    svr.Post("/configure", [&](const httplib::Request &req, httplib::Response &res) {
+        try {
+            auto j = json::parse(req.body);
+            int M = j.value("M", 32);
+            int efC = j.value("efConstruction", 400);
+            int efS = j.value("efSearch", 100);
+            
+            vEngine.clear(); 
+            vEngine.reconfigure(M, efC, efS);
+            
+            res.set_content("{\"status\":\"ok\", \"message\":\"HNSW configured\"}", "application/json");
+        } catch (std::exception& e) {
+            res.status = 400;
+        }
+    });
+
     // --- Vector Engine Endpoints ---
     svr.Post("/add_vector", [&](const httplib::Request &req, httplib::Response &res) {
         try {
@@ -55,7 +72,8 @@ int main() {
     svr.Post("/search_vector", [&](const httplib::Request &req, httplib::Response &res) {
         try {
             auto j = json::parse(req.body);
-            auto results = vEngine.search(j["query"].get<std::vector<float>>(), j["top_k"]);
+            int ef_search = j.value("ef_search", -1);
+            auto results = vEngine.search(j["query"].get<std::vector<float>>(), j["top_k"], ef_search);
             
             json j_res = json::array();
             for (auto& r : results) {

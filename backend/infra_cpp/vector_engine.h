@@ -13,24 +13,18 @@
 struct HNSWNode {
     int id;
     int max_layer;
-    int neighbors[8][16]; // Fixed max neighbors per layer for performance
-    int neighbor_counts[8];
+    std::vector<int> neighbors[8]; 
 
-    HNSWNode(int _id) : id(_id), max_layer(0) {
-        for (int i = 0; i < 8; ++i) {
-            neighbor_counts[i] = 0;
-            for (int j = 0; j < 16; ++j) neighbors[i][j] = -1;
-        }
-    }
+    HNSWNode(int _id) : id(_id), max_layer(0) {}
 };
 
 class VectorEngine {
 public:
-    VectorEngine();
+    VectorEngine(int M = 32, int efConstruction = 400, int efSearch = 100);
     ~VectorEngine();
 
     void addVector(const std::vector<float>& vec, const std::string& id);
-    std::vector<std::pair<std::string, float>> search(const std::vector<float>& query_vec, int k);
+    std::vector<std::pair<std::string, float>> search(const std::vector<float>& query_vec, int k, int ef_search = -1);
     void clear();
     int getPendingCount() const;
     void normalizeVector(std::vector<float>& vec);
@@ -39,6 +33,7 @@ public:
     void rebuildIndex();
     bool saveSnapshot(const std::string& path);
     bool loadSnapshot(const std::string& path);
+    void reconfigure(int M, int efConstruction, int efSearch);
 
 private:
     std::vector<std::vector<float>> store_;
@@ -67,7 +62,9 @@ private:
     void backgroundWorkerLoop();
 
     const int MAX_LAYERS = 8;
-    const int MAX_NEIGHBORS = 16;
+    int M_;
+    int efConstruction_;
+    int efSearch_default_;
 };
 
 const char* getSIMDBackend();
