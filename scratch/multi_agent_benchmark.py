@@ -1,22 +1,25 @@
 import requests
 import json
 import time
-import ollama
+from backend.brain.models.model_router import ModelRouter
 
 # Recallix API Configuration
 API_URL = "http://127.0.0.1:8000/memory"
 API_KEY = "local_dev_key"
 HEADERS = {"X-API-Key": API_KEY, "Content-Type": "application/json"}
 
-MODEL_A = "llama3.1:8b"
-MODEL_B = "mistral:latest"
+# Initialize Router for Agents
+router = ModelRouter()
 
-def get_llm_response(model, prompt):
+MODEL_A = router.fast_model   # DeepSeek-V4-Pro
+MODEL_B = router.smart_model  # GLM-4.7
+
+def get_llm_response(task_type, prompt):
     try:
-        response = ollama.chat(model=model, messages=[{'role': 'user', 'content': prompt}])
-        return response['message']['content']
+        # Uses the ModelRouter to handle NVIDIA specific logic/keys
+        return router.route(task_type, prompt)
     except Exception as e:
-        print(f"   ❌ LLM Error ({model}): {e}")
+        print(f"   ❌ LLM Error: {e}")
         return ""
 
 def store_memory(agent_id, content, m_type="shared"):
@@ -51,15 +54,27 @@ def run_multi_agent_benchmark():
     # 1. Agent A generates a secret fact
     print(f"\n1️⃣ Agent A ({MODEL_A}) creating a memory...")
     prompt_a = "Create a unique secret password (just 3 random words). Only output the password, nothing else."
-    secret_fact = get_llm_response(MODEL_A, prompt_a).strip().strip("'").strip('"')
+    secret_fact = get_llm_response("compression", prompt_a).strip().strip("'").strip('"')
     if not secret_fact: return
-    print(f"   [Llama] Secret generated: '{secret_fact}'")
+    print(f"   [Agent A] Secret generated: '{secret_fact}'")
     
-    # 2. Store in MemoryOS
+    # 2. Store distractors and real fact in MemoryOS
+    print(f"\n2️⃣ Injecting distractors and storing real fact...")
+    distractors = [
+        "The secret project code is ALPHA-9",
+        "The secret project code is GHOST-PROTO",
+        "The secret project code is ZEPHYR-X",
+        "The secret project code is OMEGA-VOID"
+    ]
+    for d in distractors:
+        requests.post(f"{API_URL}/store", json={"content": d, "agent_id": "system", "memory_type": "shared", "user_id": "test_user_multi"}, headers=HEADERS)
+    
     start_store = time.time()
     store_memory("llama_agent", f"The secret project code is {secret_fact}", m_type="shared")
     end_store = time.time()
-    print(f"   💾 Stored in MemoryOS (Shared) | Latency: {(end_store - start_store)*1000:.2f}ms")
+    memory_store_latency = (end_store - start_store) * 1000
+    print(f"   💾 Stored real fact in MemoryOS | Memory store latency: {memory_store_latency:.2f}ms")
+    print(f"   🤖 LLM generation time: reported separately")
     
     # 3. Agent B queries for the fact
     print(f"\n2️⃣ Agent B ({MODEL_B}) retrieving memory...")
@@ -70,26 +85,34 @@ def run_multi_agent_benchmark():
     end_recall = time.time()
     
     print(f"   🔍 Recall Response Latency: {(end_recall - start_recall)*1000:.2f}ms")
+    if memories:
+        print(f"   📋 Retrieved {len(memories)} memories:")
+        for i, m in enumerate(memories[:3]):
+            content = m["content"] if isinstance(m, dict) else m
+            print(f"      [{i}] {content[:100]}...")
+    else:
+        print(f"   ⚠️ No memories retrieved.")
     
     # 4. Agent B uses the memory to answer
     print(f"\n3️⃣ Agent B ({MODEL_B}) formulating final answer...")
     if memories:
         context = memories[0]["content"] if isinstance(memories[0], dict) else memories[0]
-        prompt_b = f"You are Mistral. Based ONLY on this memory: '{context}', what is the secret project code? Output ONLY the code."
-        final_answer = get_llm_response(MODEL_B, prompt_b).strip().strip("'").strip('"')
-        print(f"   [Mistral] Final Answer: '{final_answer}'")
+        prompt_b = f"You are a helpful AI assistant. Based ONLY on this memory: '{context}', what is the secret project code? Output ONLY the code."
+        final_answer = get_llm_response("reasoning", prompt_b).strip().strip("'").strip('"')
+        print(f"   [Agent B] Final Answer: '{final_answer}'")
         
-        # 5. Verification (Smarter matching: look for parts of the secret)
-        # We check if the core password words are present
-        words = secret_fact.lower().split()
-        match_count = sum(1 for w in words if w in final_answer.lower())
+        # 5. Verification (Exact phrase match)
+        # We check if the exact secret_fact is present in the final_answer
+        is_exact_match = secret_fact.lower() in final_answer.lower()
+        fidelity = 100.0 if is_exact_match else 0.0 # Strict exact match for this audit
         
-        if match_count >= len(words) * 0.8: # 80% word match
+        if is_exact_match:
             print(f"\n✅ SUCCESS: Multi-agent memory transfer verified!")
-            print(f"   Fidelity: {match_count/len(words)*100:.1f}%")
+            print(f"   Fidelity: {fidelity:.1f}% (Exact Match)")
         else:
             print(f"\n❌ FAILURE: Agent B could not correctly use Agent A's memory.")
             print(f"   Expected: {secret_fact} | Got: {final_answer}")
+            print(f"   Fidelity: {fidelity:.1f}%")
     else:
         print(f"\n❌ FAILURE: No memories retrieved for Agent B.")
 

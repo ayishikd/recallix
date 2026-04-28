@@ -37,20 +37,38 @@ class SemanticMemory:
             if res.status_code == 200:
                 results = res.json().get("results", [])
                 parsed_results = []
+                query_words = set(query.lower().split())
+
                 for item in results:
                     mid = item.get("id")
                     if not mid: continue
                     parts = mid.split("::")
                     if len(parts) >= 4:
+                        m_user_id = parts[0]
+                        # SECURITY: Only return memories for this user
+                        if m_user_id != user_id:
+                            continue
+                            
+                        # Hybrid Scoring: Boost results with exact keyword matches
+                        # (Especially important for IDs like 'Galaxy X-76')
+                        boost = 0.0
+                        # Check for keyword matches in the memory metadata/id
+                        for word in query_words:
+                            if len(word) > 2 and word in mid.lower():
+                                boost += 0.2
+                            
                         parsed_results.append({
                             "id": mid,
-                            "user_id": parts[0],
+                            "user_id": m_user_id,
                             "agent_id": parts[1],
                             "memory_type": parts[2],
                             "timestamp": parts[3],
                             "sqlite_id": parts[4] if len(parts) > 4 else None,
-                            "score": item.get("score")
+                            "score": item.get("score", 0) + boost
                         })
+                
+                # Re-sort by boosted score
+                parsed_results.sort(key=lambda x: x["score"], reverse=True)
                 return parsed_results
         except Exception as e:
             print(f"Error connecting to C++ infra: {e}")

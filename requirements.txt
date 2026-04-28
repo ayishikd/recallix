@@ -10,3 +10,5 @@ tqdm
 python-multipart
 pyyaml
 ollama
+openai
+python-dotenv

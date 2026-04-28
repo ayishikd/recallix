@@ -38,6 +38,20 @@ int main() {
         }
     });
 
+    svr.Post("/bulk_add", [&](const httplib::Request &req, httplib::Response &res) {
+        try {
+            auto j = json::parse(req.body);
+            auto vectors = j["vectors"];
+            for (auto& v : vectors) {
+                vEngine.addVector(v["vector"].get<std::vector<float>>(), v["id"].get<std::string>());
+            }
+            res.set_content("{\"status\":\"ok\"}", "application/json");
+        } catch (std::exception& e) {
+            std::cerr << "Error in /bulk_add: " << e.what() << std::endl;
+            res.status = 400;
+        }
+    });
+
     svr.Post("/search_vector", [&](const httplib::Request &req, httplib::Response &res) {
         try {
             auto j = json::parse(req.body);
@@ -61,6 +75,13 @@ int main() {
     });
 
     // --- System Status ---
+    svr.Get("/status", [&](const httplib::Request &req, httplib::Response &res) {
+        res.set_content(json({
+            {"status", "online"},
+            {"pending_count", vEngine.getPendingCount()}
+        }).dump(), "application/json");
+    });
+
     svr.Get("/health", [](const httplib::Request &req, httplib::Response &res) {
         res.set_content("{\"status\":\"healthy\", \"engine\":\"HNSW+NEON\"}", "application/json");
     });

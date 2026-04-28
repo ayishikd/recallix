@@ -24,7 +24,7 @@ class MemoryRouter:
                     sq_id = c.get("sqlite_id")
                     episodic_match = None
                     if sq_id and sq_id != "None":
-                        episodic_match = self.memory.episodic.get_by_id(int(sq_id))
+                        episodic_match = self.memory.episodic.get_by_id(user_id, int(sq_id))
                     
                     if not episodic_match:
                         ts = c.get("timestamp")

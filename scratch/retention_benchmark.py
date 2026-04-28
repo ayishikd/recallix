@@ -21,8 +21,9 @@ def run_retention_benchmark():
         400: "The meeting is at 2 PM tomorrow."
     }
     
+    TOPICS = ["the weather in Tokyo", "stock market fluctuations", "a recipe for lasagna", "the history of the Eiffel Tower", "how to build a treehouse", "quantum entanglement", "the rules of cricket", "deep sea exploration"]
     for i in range(500):
-        content = important_turns.get(i, f"Turn {i}: Just some casual conversation about the weather.")
+        content = important_turns.get(i, f"Turn {i}: Discussion about {TOPICS[i % len(TOPICS)]}.")
         requests.post(f"{API_URL}/store", json={"content": content, "user_id": TEST_USER, "skip_llm": True}, headers=HEADERS)
         if i % 100 == 0:
             print(f"   Processed {i}/500 turns...")

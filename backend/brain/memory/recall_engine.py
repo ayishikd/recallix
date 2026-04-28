@@ -33,6 +33,11 @@ class RecallEngine:
                 print(f"[RecallEngine] Intent-Driven Pipeline: {query[:40]}...")
                 intent_results = self.intent_manager.execute_intent_recall(user_id, query, agent_id)
                 
+                # 4. Rerank for precision
+                if self.reranker and intent_results.get("memories"):
+                    print(f"[RecallEngine] Reranking {len(intent_results['memories'])} intent-results...")
+                    intent_results["memories"] = self.reranker.rerank(query, intent_results["memories"], top_n=top_k)
+                
                 # Apply reinforcement
                 self._reinforce_memories(user_id, intent_results["memories"])
                 
@@ -60,8 +65,17 @@ class RecallEngine:
         
         for c in semantic_results:
             if c.get("agent_id") == agent_id or c.get("memory_type") == "shared":
-                candidates.append({"content": str(c.get("id")), "source": "semantic", "importance": 5.0})
-                seen.add(str(c.get("id")))
+                # Fetch real content from episodic for the reranker to work!
+                sid = c.get("sqlite_id")
+                if sid:
+                    real_m = self.episodic.get_by_id(user_id, sid)
+                    if real_m:
+                        real_m["source"] = "semantic"
+                        candidates.append(real_m)
+                        seen.add(real_m["content"])
+                else:
+                    candidates.append({"content": str(c.get("id")), "source": "semantic", "importance": 5.0})
+                    seen.add(str(c.get("id")))
                 
         for c in episodic_candidates:
             if c["content"] not in seen:
@@ -70,6 +84,10 @@ class RecallEngine:
                 seen.add(c["content"])
 
         # 3. Finalization logic (Rerank -> Attention)
+        if self.reranker and candidates:
+            print(f"[RecallEngine] Reranking {len(candidates)} candidates...")
+            candidates = self.reranker.rerank(query, candidates, top_n=20)
+
         final_memories = candidates[:top_k]
         if self.attention and candidates:
             scored = self.attention.score_memories(candidates, prediction)

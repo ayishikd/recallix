@@ -18,8 +18,8 @@
 # ============================================================================
 
 models:
-  # Which provider to use: "ollama", "openai", "anthropic", "groq", or "custom"
-  provider: "ollama"
+  # Which provider to use: "ollama", "openai", "anthropic", "groq", "nvidia", or "custom"
+  provider: "nvidia"
 
   # --- Ollama (Local) ---
   # Any model pulled via `ollama pull <name>` works here.
@@ -32,7 +32,7 @@ models:
 
   # --- OpenAI (API) ---
   openai:
-    api_key: ""                          # Set your OpenAI API key
+    api_key: "${OPENAI_API_KEY}"
     base_url: "https://api.openai.com/v1"
     fast_model: "gpt-4o-mini"
     smart_model: "gpt-4o"
@@ -40,17 +40,25 @@ models:
 
   # --- Anthropic (API) ---
   anthropic:
-    api_key: ""                          # Set your Anthropic API key
+    api_key: "${ANTHROPIC_API_KEY}"
     base_url: "https://api.anthropic.com"
     fast_model: "claude-3-5-haiku-20241022"
     smart_model: "claude-sonnet-4-20250514"
 
   # --- Groq (API) ---
   groq:
-    api_key: ""                          # Set your Groq API key
+    api_key: "${GROQ_API_KEY}"
     base_url: "https://api.groq.com/openai/v1"
     fast_model: "llama-3.1-8b-instant"
     smart_model: "llama-3.3-70b-versatile"
+
+  # --- NVIDIA (API) ---
+  nvidia:
+    api_key: "${NVIDIA_API_KEY}"
+    base_url: "https://integrate.api.nvidia.com/v1"
+    fast_model: "nvidia/nemotron-nano-12b-v2-vl"
+    smart_model: "nvidia/nvidia-nemotron-nano-9b-v2"
+    embedding_model: "nvidia/nv-embedqa-e5-v5"
 
   # --- Custom (Any OpenAI-compatible API) ---
   custom:

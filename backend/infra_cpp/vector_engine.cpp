@@ -110,9 +110,12 @@ void VectorEngine::clear() {
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     store_.clear();
     id_map_.clear();
+    active_buffer_.clear();
     for (auto node : nodes_) delete node;
     nodes_.clear();
     entry_point_id_ = -1;
+    max_id_ = 0;
+    std::cout << "🧹 C++ Vector Engine cleared." << std::endl;
 }
 
 int VectorEngine::getPendingCount() const {
@@ -215,14 +218,28 @@ void VectorEngine::insertHNSW(int node_idx) {
         // Neighbor linking with max M=16
         {
             std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
-            HNSWNode* node_self = nodes_[node_idx];
             for (auto& [sim, nbr] : layer_results) {
-                if (node_self->neighbor_counts[l] >= 16) break;
+                if (nbr == node_idx) continue;
+                HNSWNode* node_self = nodes_[node_idx];
                 HNSWNode* node_nbr = nodes_[nbr];
 
-                node_self->neighbors[l][node_self->neighbor_counts[l]++] = nbr;
+                // Ensure uniqueness in node_self->neighbors
+                bool exists = false;
+                for (int i = 0; i < node_self->neighbor_counts[l]; ++i) {
+                    if (node_self->neighbors[l][i] == nbr) { exists = true; break; }
+                }
+
+                if (!exists && node_self->neighbor_counts[l] < 16) {
+                    node_self->neighbors[l][node_self->neighbor_counts[l]++] = nbr;
+                }
                 
-                if (node_nbr->neighbor_counts[l] < 16) {
+                // Ensure uniqueness in node_nbr->neighbors
+                exists = false;
+                for (int i = 0; i < node_nbr->neighbor_counts[l]; ++i) {
+                    if (node_nbr->neighbors[l][i] == node_idx) { exists = true; break; }
+                }
+
+                if (!exists && node_nbr->neighbor_counts[l] < 16) {
                     node_nbr->neighbors[l][node_nbr->neighbor_counts[l]++] = node_idx;
                 }
             }
@@ -285,7 +302,14 @@ void VectorEngine::backgroundWorkerLoop() {
         }
         
         if (node_to_index != -1) {
-            insertHNSW(node_to_index);
+            try {
+                insertHNSW(node_to_index);
+                if (node_to_index % 1000 == 0) {
+                    std::cout << "Index progress: " << node_to_index << " nodes indexed." << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "Indexing Error: " << e.what() << std::endl;
+            }
         }
     }
 }

@@ -62,11 +62,11 @@ class EpisodicMemory:
             print(f"[Episodic] Critical Store Error: {e}")
         return None
 
-    def get_by_id(self, memory_id):
+    def get_by_id(self, user_id, memory_id):
         try:
             with sqlite3.connect(self.db_path, timeout=60) as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT id, content, timestamp, importance, agent_id, memory_type FROM episodic_events WHERE id = ?", (memory_id,))
+                cursor.execute("SELECT id, content, timestamp, importance, agent_id, memory_type FROM episodic_events WHERE id = ? AND user_id = ?", (memory_id, user_id))
                 r = cursor.fetchone()
                 if r:
                     return {"id": r[0], "content": r[1], "timestamp": r[2], "importance": r[3], "agent_id": r[4], "memory_type": r[5]}

@@ -35,5 +35,5 @@ class RetrievalPlanner:
             "graph_expansion_depth": graph_depth,
             "memory_filters": filters,
             "memory_types": context["memory_types"],
-            "top_k": 10 if context["user_state"] in ["research", "learning"] else 5
+            "top_k": 30 if context["user_state"] in ["research", "learning"] else 15
         }

@@ -6,6 +6,9 @@ or any OpenAI-compatible API endpoint.
 import os
 import yaml
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Locate config.yaml relative to project root
 _CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "..", "config.yaml")
@@ -42,7 +45,10 @@ class ModelRouter:
         self.smart_model = self.provider_cfg.get("smart_model", "llama3.1:8b")
         self.embedding_model = self.provider_cfg.get("embedding_model", "mxbai-embed-large")
         self.base_url = self.provider_cfg.get("base_url", "http://localhost:11434")
-        self.api_key = self.provider_cfg.get("api_key", "")
+        
+        # Priority: 1. Environment Variable, 2. config.yaml
+        env_key_name = f"{self.provider.upper()}_API_KEY"
+        self.api_key = os.getenv(env_key_name) or self.provider_cfg.get("api_key", "")
 
         print(f"[ModelRouter] Provider: {self.provider}")
         print(f"[ModelRouter] Fast: {self.fast_model} | Smart: {self.smart_model} | Embedding: {self.embedding_model}")
@@ -62,6 +68,8 @@ class ModelRouter:
         """Dispatch to the correct provider backend."""
         if self.provider == "ollama":
             return self._query_ollama(model, prompt)
+        elif self.provider == "nvidia":
+            return self._query_nvidia(model, prompt)
         else:
             # OpenAI-compatible API (works for OpenAI, Anthropic, Groq, custom)
             return self._query_openai_compat(model, prompt)
@@ -93,6 +101,59 @@ class ModelRouter:
             return res.json()["choices"][0]["message"]["content"]
         except Exception as e:
             return f"Error querying {self.provider} model {model}: {str(e)}"
+
+    def _query_nvidia(self, model, prompt):
+        """Specific implementation for NVIDIA's Nemotron models."""
+        try:
+            from openai import OpenAI
+            
+            # Select specific key if available in env, otherwise fallback to default
+            current_api_key = self.api_key
+            if "nemotron-nano-12b" in model:
+                current_api_key = os.getenv("NVIDIA_NEMOTRON_VL_KEY") or current_api_key
+            elif "nemotron-nano-9b" in model:
+                current_api_key = os.getenv("NVIDIA_NEMOTRON_NANO_KEY") or current_api_key
+
+            client = OpenAI(
+                base_url=self.base_url,
+                api_key=current_api_key
+            )
+            
+            messages = []
+            extra_body = {}
+            
+            # Nemotron-specific thinking logic
+            if "nvidia-nemotron-nano-9b-v2" in model:
+                messages.append({"role": "system", "content": "/think"})
+                extra_body = {
+                    "min_thinking_tokens": 1024,
+                    "max_thinking_tokens": 2048
+                }
+            
+            messages.append({"role": "user", "content": prompt})
+
+            completion = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.6,
+                top_p=0.95,
+                max_tokens=4096,
+                extra_body=extra_body if extra_body else None
+            )
+            
+            message = completion.choices[0].message
+            full_response = ""
+            
+            # Handle reasoning_content for Nemotron thinking models
+            reasoning = getattr(message, "reasoning_content", None)
+            if reasoning:
+                full_response += f"<thought>\n{reasoning}\n</thought>\n\n"
+            
+            full_response += message.content or ""
+            return full_response
+        except Exception as e:
+            print(f"[NVIDIA Error] Model: {model} | Type: {type(e)} | Details: {str(e)}")
+            return f"Error querying NVIDIA model {model}: {str(e)}"
 
     def get_embedding(self, text):
         """Generate embeddings using the configured provider."""

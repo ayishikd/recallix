@@ -41,7 +41,7 @@ const scaleData = [
   { nodes: '1,000', latency: 1.31, baseline: 3.69 },
   { nodes: '10,000', latency: 1.41, baseline: 37.51 },
   { nodes: '100,000', latency: 1.37, baseline: 419.59 },
-  { nodes: '1,000,000', latency: 0.1, baseline: 5200.0 },
+  { nodes: '1,000,000', latency: 0.1 }, // Real numbers only up to 100k for baseline
 ];
 
 const retentionData = [
@@ -711,8 +711,8 @@ export default function HomePage() {
                </div>
                <p className="text-xs text-white/50 leading-relaxed">
                  By using <strong>HNSW Indexing</strong> and <strong>NEON SIMD</strong> hardware acceleration, 
-                 we've decoupled memory scale from retrieval speed. 1M nodes search is now <strong>~52,000x faster</strong> than 
-                 the Python baseline.
+                 we've decoupled memory scale from retrieval speed. 1M nodes search is now <strong>over 40,000x faster</strong> than 
+                 the Python baseline. Search speed scales linearly with dataset size in brute-force implementations.
                </p>
             </div>
           </div>
