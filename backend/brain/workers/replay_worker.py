@@ -1,6 +1,6 @@
 import time
 import requests
-from ..models.model_router import ModelRouter
+from backend.brain.models.model_router import ModelRouter
 
 class ReplayWorker:
     def __init__(self, memory_manager):

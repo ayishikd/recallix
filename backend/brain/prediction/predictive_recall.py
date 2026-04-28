@@ -1,4 +1,4 @@
-from ..models.model_router import ModelRouter
+from backend.brain.models.model_router import ModelRouter
 
 class PredictiveRecall:
     def __init__(self, memory_manager):

@@ -1,5 +1,6 @@
 #include "vector_engine.h"
 #include <iostream>
+#include <fstream>
 #include <algorithm>
 #include <queue>
 #include <cmath>
@@ -22,21 +23,20 @@
             __m256 vb = _mm256_loadu_ps(b + i);
             sum = _mm256_fmadd_ps(va, vb, sum);
         }
-        // Horizontal sum of 8 floats
-        __m128 hi = _mm256_extractf128_ps(sum, 1);
-        __m128 lo = _mm256_castps256_ps128(sum);
-        __m128 sum128 = _mm_add_ps(lo, hi);
-        sum128 = _mm_hadd_ps(sum128, sum128);
-        sum128 = _mm_hadd_ps(sum128, sum128);
-        float result = _mm_cvtss_f32(sum128);
-        // Handle remainder
+        __m128 vlow = _mm256_castps256_ps128(sum);
+        __m128 vhigh = _mm256_extractf128_ps(sum, 1);
+        __m128 vsum = _mm_add_ps(vlow, vhigh);
+        __m128 shuf = _mm_shuffle_ps(vsum, vsum, _MM_SHUFFLE(2, 3, 0, 1));
+        vsum = _mm_add_ps(vsum, shuf);
+        shuf = _mm_shuffle_ps(vsum, vsum, _MM_SHUFFLE(1, 0, 3, 2));
+        vsum = _mm_add_ps(vsum, shuf);
+        float result = _mm_cvtss_f32(vsum);
         for (; i < size; ++i) result += a[i] * b[i];
         return result;
     }
 
 #elif defined(__SSE__)
     #include <xmmintrin.h>
-    #include <pmmintrin.h>
     #define SIMD_IMPL "SSE"
 
     float dot_product_simd(const float* a, const float* b, int size) {
@@ -47,9 +47,10 @@
             __m128 vb = _mm_loadu_ps(b + i);
             sum = _mm_add_ps(sum, _mm_mul_ps(va, vb));
         }
-        // Horizontal sum of 4 floats
-        sum = _mm_hadd_ps(sum, sum);
-        sum = _mm_hadd_ps(sum, sum);
+        __m128 shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(2, 3, 0, 1));
+        sum = _mm_add_ps(sum, shuf);
+        shuf = _mm_shuffle_ps(sum, sum, _MM_SHUFFLE(1, 0, 3, 2));
+        sum = _mm_add_ps(sum, shuf);
         float result = _mm_cvtss_f32(sum);
         for (; i < size; ++i) result += a[i] * b[i];
         return result;
@@ -106,11 +107,24 @@ int VectorEngine::getRandomLayer() {
     return layer;
 }
 
+void VectorEngine::normalizeVector(std::vector<float>& vec) {
+    float norm_sq = dot_product_simd(vec.data(), vec.data(), vec.size());
+    if (norm_sq > 1e-12) {
+        float norm = std::sqrt(norm_sq);
+        for (float& x : vec) x /= norm;
+    }
+}
+
 void VectorEngine::clear() {
+    {
+        std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+        active_buffer_.clear();
+    }
+    
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     store_.clear();
     id_map_.clear();
-    active_buffer_.clear();
+    deleted_nodes_.clear(); // Fix #2: Clear tombstones
     for (auto node : nodes_) delete node;
     nodes_.clear();
     entry_point_id_ = -1;
@@ -123,6 +137,76 @@ int VectorEngine::getPendingCount() const {
     return active_buffer_.size();
 }
 
+void VectorEngine::removeVector(const std::string& id) {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    for (size_t i = 0; i < id_map_.size(); ++i) {
+        if (id_map_[i] == id) {
+            deleted_nodes_.insert((int)i);
+            break;
+        }
+    }
+}
+
+bool VectorEngine::saveSnapshot(const std::string& path) {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    std::ofstream out(path, std::ios::binary);
+    if (!out) return false;
+    
+    size_t count = id_map_.size();
+    out.write((char*)&count, sizeof(size_t));
+    for (size_t i = 0; i < count; ++i) {
+        size_t id_len = id_map_[i].size();
+        out.write((char*)&id_len, sizeof(size_t));
+        out.write(id_map_[i].data(), id_len);
+        
+        size_t vec_size = store_[i].size();
+        out.write((char*)&vec_size, sizeof(size_t));
+        out.write((char*)store_[i].data(), vec_size * sizeof(float));
+    }
+    
+    size_t deleted_count = deleted_nodes_.size();
+    out.write((char*)&deleted_count, sizeof(size_t));
+    for (int idx : deleted_nodes_) {
+        out.write((char*)&idx, sizeof(int));
+    }
+    
+    return true;
+}
+
+bool VectorEngine::loadSnapshot(const std::string& path) {
+    std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    std::ifstream in(path, std::ios::binary);
+    if (!in) return false;
+    
+    clear();
+    
+    size_t count;
+    in.read((char*)&count, sizeof(size_t));
+    for (size_t i = 0; i < count; ++i) {
+        size_t id_len;
+        in.read((char*)&id_len, sizeof(size_t));
+        std::string id(id_len, ' ');
+        in.read(&id[0], id_len);
+        
+        size_t vec_size;
+        in.read((char*)&vec_size, sizeof(size_t));
+        std::vector<float> vec(vec_size);
+        in.read((char*)vec.data(), vec_size * sizeof(float));
+        
+        addVector(vec, id);
+    }
+    
+    size_t deleted_count;
+    in.read((char*)&deleted_count, sizeof(size_t));
+    for (size_t i = 0; i < deleted_count; ++i) {
+        int idx;
+        in.read((char*)&idx, sizeof(int));
+        deleted_nodes_.insert(idx);
+    }
+    
+    return true;
+}
+
 void VectorEngine::insertHNSW(int node_idx) {
     HNSWNode* new_node = nullptr;
     int max_l = -1;
@@ -131,6 +215,7 @@ void VectorEngine::insertHNSW(int node_idx) {
     {
         std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
         if (node_idx >= (int)nodes_.size()) return;
+        if (deleted_nodes_.count(node_idx)) return;
         new_node = nodes_[node_idx];
         if (entry_point_id_ != -1) {
             curr_node_idx = entry_point_id_;
@@ -147,15 +232,18 @@ void VectorEngine::insertHNSW(int node_idx) {
         return;
     }
 
-    const auto& query_vec = store_[node_idx];
+    std::vector<float> query_vec;
+    {
+        std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+        if (node_idx >= (int)store_.size()) return;
+        query_vec = store_[node_idx];
+    }
     
-    // 1. Greedy descent from top layer to target layer
     for (int l = max_l; l > target_layer; --l) {
         bool changed = true;
         while (changed) {
             changed = false;
             float curr_sim = dot_product_simd(query_vec.data(), store_[curr_node_idx].data(), query_vec.size());
-            
             HNSWNode* curr_node = nodes_[curr_node_idx];
             for (int i = 0; i < curr_node->neighbor_counts[l]; ++i) {
                 int neighbor = curr_node->neighbors[l][i];
@@ -169,7 +257,6 @@ void VectorEngine::insertHNSW(int node_idx) {
         }
     }
 
-    // 2. Beam search from target layer down to 0
     static thread_local std::vector<int> visited_flags;
     static thread_local int current_version = 0;
     if (visited_flags.size() < nodes_.capacity()) {
@@ -215,7 +302,6 @@ void VectorEngine::insertHNSW(int node_idx) {
         std::sort(layer_results.begin(), layer_results.end(), std::greater<>());
         curr_node_idx = layer_results[0].second;
 
-        // Neighbor linking with max M=16
         {
             std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
             for (auto& [sim, nbr] : layer_results) {
@@ -223,7 +309,6 @@ void VectorEngine::insertHNSW(int node_idx) {
                 HNSWNode* node_self = nodes_[node_idx];
                 HNSWNode* node_nbr = nodes_[nbr];
 
-                // Ensure uniqueness in node_self->neighbors
                 bool exists = false;
                 for (int i = 0; i < node_self->neighbor_counts[l]; ++i) {
                     if (node_self->neighbors[l][i] == nbr) { exists = true; break; }
@@ -233,7 +318,6 @@ void VectorEngine::insertHNSW(int node_idx) {
                     node_self->neighbors[l][node_self->neighbor_counts[l]++] = nbr;
                 }
                 
-                // Ensure uniqueness in node_nbr->neighbors
                 exists = false;
                 for (int i = 0; i < node_nbr->neighbor_counts[l]; ++i) {
                     if (node_nbr->neighbors[l][i] == node_idx) { exists = true; break; }
@@ -274,14 +358,20 @@ VectorEngine::~VectorEngine() {
 
 void VectorEngine::addVector(const std::vector<float>& vec, const std::string& id) {
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
+    
+    // Fix #8: Enforce dimensionality consistency
+    if (!store_.empty() && vec.size() != store_[0].size()) {
+        std::cerr << "⚠️ Dimension mismatch: expected " << store_[0].size() << ", got " << vec.size() << std::endl;
+        return;
+    }
+
+    std::vector<float> norm_vec = vec;
+    normalizeVector(norm_vec);
+
     int node_idx = store_.size();
-    store_.push_back(vec);
+    store_.push_back(norm_vec);
     id_map_.push_back(id);
-    
-    // Create node (not yet linked in HNSW)
     nodes_.push_back(new HNSWNode(node_idx));
-    
-    // Push to active buffer for background indexing
     active_buffer_.push_back(node_idx);
     worker_cv_.notify_one();
 }
@@ -292,21 +382,15 @@ void VectorEngine::backgroundWorkerLoop() {
         {
             std::unique_lock<std::recursive_mutex> lock(engine_mutex_);
             worker_cv_.wait(lock, [this] { return stop_worker_ || !active_buffer_.empty(); });
-            
             if (stop_worker_ && active_buffer_.empty()) break;
-            
             if (!active_buffer_.empty()) {
                 node_to_index = active_buffer_.front();
                 active_buffer_.pop_front();
             }
         }
-        
         if (node_to_index != -1) {
             try {
                 insertHNSW(node_to_index);
-                if (node_to_index % 1000 == 0) {
-                    std::cout << "Index progress: " << node_to_index << " nodes indexed." << std::endl;
-                }
             } catch (const std::exception& e) {
                 std::cerr << "Indexing Error: " << e.what() << std::endl;
             }
@@ -318,10 +402,9 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
     std::lock_guard<std::recursive_mutex> lock(engine_mutex_);
     if (entry_point_id_ == -1) return {};
 
-    int efSearch = 50; 
+    int efSearch = 100; // Increased for Tier 2 precision
     int curr_node_idx = entry_point_id_;
 
-    // 1. Greedy descent to layer 0
     for (int l = nodes_[entry_point_id_]->max_layer; l > 0; --l) {
         bool changed = true;
         while (changed) {
@@ -340,11 +423,9 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
         }
     }
 
-    // 2. Beam search at layer 0
     std::priority_queue<std::pair<float, int>, std::vector<std::pair<float, int>>, std::greater<>> top_k;
     std::priority_queue<std::pair<float, int>> candidates;
     
-    // Use the versioned visited list
     static thread_local std::vector<int> search_visited_flags;
     static thread_local int search_version = 0;
     if (search_visited_flags.size() < nodes_.size() + 1) search_visited_flags.resize(nodes_.size() + 1000, 0);
@@ -377,17 +458,19 @@ std::vector<std::pair<std::string, float>> VectorEngine::search(const std::vecto
 
     std::vector<std::pair<int, float>> combined_results;
     while (!top_k.empty()) {
-        combined_results.push_back({top_k.top().second, top_k.top().first});
+        if (deleted_nodes_.find(top_k.top().second) == deleted_nodes_.end()) {
+            combined_results.push_back({top_k.top().second, top_k.top().first});
+        }
         top_k.pop();
     }
 
-    // 3. Brute-force search on active buffer
     for (int buffer_idx : active_buffer_) {
-        float sim = dot_product_simd(query_vec.data(), store_[buffer_idx].data(), query_vec.size());
-        combined_results.push_back({buffer_idx, sim});
+        if (deleted_nodes_.find(buffer_idx) == deleted_nodes_.end()) {
+            float sim = dot_product_simd(query_vec.data(), store_[buffer_idx].data(), query_vec.size());
+            combined_results.push_back({buffer_idx, sim});
+        }
     }
 
-    // 4. Sort and return top K
     std::sort(combined_results.begin(), combined_results.end(), [](const auto& a, const auto& b) {
         return a.second > b.second;
     });

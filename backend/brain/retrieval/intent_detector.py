@@ -1,5 +1,6 @@
 import re
 import time
+from functools import lru_cache
 
 class IntentDetector:
     def __init__(self):
@@ -12,24 +13,19 @@ class IntentDetector:
             "preference_update": [r"\blike\b", r"\bdislike\b", r"\bprefer\b", r"\bhate\b", r"\blove\b"],
             "research": [r"\bcompare\b", r"\banalyze\b", r"\bresearch\b"]
         }
-        self.cache = {}
 
+    @lru_cache(maxsize=1024)
     def detect(self, query):
         """
         Classifies user queries into intent categories.
-        Includes a simple cache for repeated queries.
+        Fix #2: Using lru_cache to prevent memory leaks while maintaining performance.
         """
-        if query in self.cache:
-            return self.cache[query]
-
         query_lower = query.lower()
         
         # Priority 1: Check Conversation first
         for pattern in self.rules["conversation"]:
             if re.search(pattern, query_lower):
-                result = {"intent": "conversation", "confidence": 0.9}
-                self.cache[query] = result
-                return result
+                return {"intent": "conversation", "confidence": 0.9}
 
         detected_intent = "conversation" # Default fallback
         max_matches = 0
@@ -49,11 +45,7 @@ class IntentDetector:
         # Simple confidence logic
         confidence = 0.5 if max_matches == 0 else min(0.6 + (max_matches * 0.1), 0.95)
         
-        result = {
+        return {
             "intent": detected_intent,
             "confidence": confidence
         }
-        
-        # Cache the result
-        self.cache[query] = result
-        return result

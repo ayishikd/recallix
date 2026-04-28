@@ -1,97 +1,109 @@
 import sqlite3
 import os
 import time
+from backend.utils.paths import get_db_path, ensure_dir
+from backend.utils.internal_client import internal_post
 
 class EpisodicMemory:
-    def __init__(self, db_path="backend/storage/sqlite_db/memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path or get_db_path("backend/storage/sqlite_db/memory.db")
         self._init_db()
 
     def _init_db(self):
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
-        conn = sqlite3.connect(self.db_path, timeout=60) # Increased timeout
+        ensure_dir(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30)
         cursor = conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA synchronous=NORMAL")
+        
+        # Primary storage
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS episodic_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                agent_id TEXT DEFAULT 'default_agent',
                 user_id TEXT,
-                memory_type TEXT DEFAULT 'private',
+                agent_id TEXT,
+                memory_type TEXT,
                 content TEXT,
                 timestamp REAL,
                 importance REAL,
                 reinforcement_score REAL DEFAULT 1.0,
-                retrieval_count INTEGER DEFAULT 0,
-                last_used_timestamp REAL,
-                access_count INTEGER DEFAULT 1,
-                last_accessed REAL,
-                cluster_id TEXT,
-                schema_tags TEXT
+                retrieval_count INTEGER DEFAULT 0
             )
         ''')
+        
+        # Fix #9: Use FTS5 for efficient lexical search
+        cursor.execute("CREATE VIRTUAL TABLE IF NOT EXISTS episodic_fts USING fts5(content, content_id UNINDEXED)")
+        
         conn.commit()
         conn.close()
 
     def store(self, event):
-        # Using context manager for better lock handling
-        try:
-            with sqlite3.connect(self.db_path, timeout=60) as conn:
-                conn.execute("PRAGMA journal_mode=WAL")
-                cursor = conn.cursor()
-                cursor.execute('''
-                    INSERT INTO episodic_events (
-                        agent_id, user_id, memory_type, content, timestamp, 
-                        importance, last_accessed, cluster_id, schema_tags
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    event.get("agent_id", "default_agent"),
-                    event["user_id"],
-                    event.get("memory_type", "private"),
-                    event["content"],
-                    event["timestamp"],
-                    event["importance"],
-                    event["timestamp"],
-                    event.get("cluster_id"),
-                    event.get("schema_tags")
-                ))
-                return cursor.lastrowid
-        except Exception as e:
-            print(f"[Episodic] Critical Store Error: {e}")
-        return None
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        
+        cursor.execute('''
+            INSERT INTO episodic_events (user_id, agent_id, memory_type, content, timestamp, importance)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (event["user_id"], event["agent_id"], event["memory_type"], event["content"], event["timestamp"], event["importance"]))
+        
+        row_id = cursor.lastrowid
+        
+        # Sync with FTS5
+        cursor.execute("INSERT INTO episodic_fts (content, content_id) VALUES (?, ?)", (event["content"], row_id))
+        
+        conn.commit()
+        conn.close()
+        return row_id
+
+    def search(self, user_id, query, agent_id=None, limit=10):
+        """
+        Fix #9: Optimized hybrid search using FTS5 + Salience Ranking
+        """
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        
+        # Lexical search via FTS5
+        fts_query = ' OR '.join(query.split())
+        sql = '''
+            SELECT e.* FROM episodic_events e
+            JOIN episodic_fts f ON e.id = f.content_id
+            WHERE e.user_id = ? AND f.content MATCH ?
+        '''
+        params = [user_id, fts_query]
+        
+        if agent_id:
+            sql += " AND (e.agent_id = ? OR e.memory_type = 'shared')"
+            params.append(agent_id)
+            
+        # Hybrid Ranking (Fix #3 from accuracy audit)
+        sql += " ORDER BY (e.importance * 0.7 + e.reinforcement_score * 0.3) DESC LIMIT ?"
+        params.append(limit)
+        
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        
+        results = []
+        for r in rows:
+            results.append({
+                "id": r[0], "user_id": r[1], "agent_id": r[2],
+                "memory_type": r[3], "content": r[4], "timestamp": r[5],
+                "importance": r[6], "reinforcement_score": r[7]
+            })
+        conn.close()
+        return results
 
     def get_by_id(self, user_id, memory_id):
-        try:
-            with sqlite3.connect(self.db_path, timeout=60) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, content, timestamp, importance, agent_id, memory_type FROM episodic_events WHERE id = ? AND user_id = ?", (memory_id, user_id))
-                r = cursor.fetchone()
-                if r:
-                    return {"id": r[0], "content": r[1], "timestamp": r[2], "importance": r[3], "agent_id": r[4], "memory_type": r[5]}
-        except: pass
-        return None
-
-    def search(self, user_id, query, agent_id="default_agent", limit=5):
-        words = query.split()
-        if not words: return []
-        where_clause = " AND (" + " OR ".join(["content LIKE ?" for _ in words]) + ")"
-        params = [user_id, agent_id] + [f"%{w}%" for w in words] + [limit]
-        try:
-            with sqlite3.connect(self.db_path, timeout=60) as conn:
-                cursor = conn.cursor()
-                cursor.execute(f"SELECT id, content, timestamp, importance, agent_id, memory_type FROM episodic_events WHERE user_id = ? AND (agent_id = ? OR memory_type = 'shared') {where_clause} ORDER BY timestamp DESC LIMIT ?", params)
-                results = cursor.fetchall()
-                return [{"id": r[0], "content": r[1], "timestamp": r[2], "importance": r[3], "agent_id": r[4], "memory_type": r[5]} for r in results]
-        except: return []
-
-    def get_by_timestamp(self, user_id, timestamp):
-        try:
-            with sqlite3.connect(self.db_path, timeout=60) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT id, content, timestamp, importance, agent_id, memory_type FROM episodic_events WHERE user_id = ? AND ABS(timestamp - ?) < 0.1 LIMIT 1", (user_id, float(timestamp)))
-                r = cursor.fetchone()
-                if r: return {"id": r[0], "content": r[1], "timestamp": r[2], "importance": r[3], "agent_id": r[4], "memory_type": r[5]}
-        except: pass
+        conn = sqlite3.connect(self.db_path, timeout=30)
+        cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("SELECT * FROM episodic_events WHERE id = ? AND user_id = ?", (memory_id, user_id))
+        r = cursor.fetchone()
+        conn.close()
+        if r:
+            return {
+                "id": r[0], "user_id": r[1], "agent_id": r[2],
+                "memory_type": r[3], "content": r[4], "timestamp": r[5],
+                "importance": r[6], "reinforcement_score": r[7]
+            }
         return None

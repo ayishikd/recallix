@@ -1,9 +1,11 @@
 import json
 import os
+from backend.utils.paths import get_db_path, ensure_dir
 
 class WorkingMemory:
-    def __init__(self, storage_path="backend/storage/working_memory.json"):
-        self.storage_path = storage_path
+    def __init__(self, storage_path=None):
+        self.storage_path = storage_path or get_db_path("backend/storage/working_memory.json")
+        ensure_dir(self.storage_path)
         self.data = self._load()
 
     def _load(self):
@@ -18,10 +20,16 @@ class WorkingMemory:
 
     def update(self, user_id, context_delta):
         if user_id not in self.data:
-            self.data[user_id] = {"summary": "", "goals": []}
+            self.data[user_id] = {"summary": "", "history": []}
         
-        # Simple update logic: append to summary or update state
-        self.data[user_id]["summary"] += f" | {context_delta}"
+        # Implement sliding window of last 15 items
+        history = self.data[user_id].get("history", [])
+        history.append(context_delta)
+        if len(history) > 15:
+            history = history[-15:]
+        
+        self.data[user_id]["history"] = history
+        self.data[user_id]["summary"] = " | ".join(history)
         self._save()
 
     def get(self, user_id):

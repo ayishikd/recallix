@@ -1,15 +1,17 @@
 import sqlite3
 import os
+from backend.utils.paths import get_db_path, ensure_dir
 
 class LongTermMemory:
-    def __init__(self, db_path="backend/storage/sqlite_db/memory.db"):
-        self.db_path = db_path
+    def __init__(self, db_path=None):
+        self.db_path = db_path or get_db_path("backend/storage/sqlite_db/memory.db")
         self._init_db()
 
     def _init_db(self):
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        ensure_dir(self.db_path)
         conn = sqlite3.connect(self.db_path, timeout=30)
         cursor = conn.cursor()
+        # Fix #6: Enforce WAL mode for concurrency
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS long_term_facts (
@@ -26,10 +28,10 @@ class LongTermMemory:
         conn.close()
 
     def promote(self, user_id, event):
-        # In a real system, use LLM to extract facts
-        # For now, store the content as a fact
-        conn = sqlite3.connect(self.db_path)
+        # Fix #6: Use WAL and timeout
+        conn = sqlite3.connect(self.db_path, timeout=30)
         cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute('''
             INSERT INTO long_term_facts (user_id, fact, importance, last_updated, last_accessed)
             VALUES (?, ?, ?, ?, ?)
@@ -41,8 +43,10 @@ class LongTermMemory:
         import time
         from ...utils.decay_logic import DecayLogic
         
-        conn = sqlite3.connect(self.db_path)
+        # Fix #6: Use WAL and timeout
+        conn = sqlite3.connect(self.db_path, timeout=30)
         cursor = conn.cursor()
+        cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute('''
             SELECT id, fact, importance, access_count, last_accessed FROM long_term_facts
             WHERE user_id = ?

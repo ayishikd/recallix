@@ -1,6 +1,6 @@
 import sqlite3
 import time
-from ..models.model_router import ModelRouter
+from backend.brain.models.model_router import ModelRouter
 
 class StateInference:
     def __init__(self, db_path="backend/storage/world_state_store/states.db"):

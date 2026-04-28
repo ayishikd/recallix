@@ -1,6 +1,7 @@
 import json
 import sqlite3
 import time
+import math
 from ..prediction.predictive_recall import PredictiveRecall
 from ..schema_engine.registry.manager import SchemaRegistry
 from ..retrieval.manager import IntentRetrievalManager
@@ -22,21 +23,60 @@ class RecallEngine:
         self.attention = None 
         self.reranker = None 
 
+    def _calculate_unified_score(self, query, memory, semantic_score=None):
+        """
+        Fix #3: Unified Scoring Function
+        semantic_similarity * 0.45 + lexical_overlap * 0.20 + importance * 0.20 + reinforcement * 0.10 + recency_decay * 0.05
+        """
+        content = memory.get("content", "").lower()
+        q_lower = query.lower()
+        
+        # 1. Lexical Overlap (Simple Jaccard-ish)
+        q_words = set(q_lower.split())
+        c_words = set(content.split())
+        overlap = len(q_words.intersection(c_words)) / max(len(q_words), 1)
+        
+        # 2. Importance (Scaled 0-1)
+        importance = float(memory.get("importance", 5.0)) / 10.0
+        
+        # 3. Reinforcement (Scaled 0-1)
+        reinforcement = float(memory.get("reinforcement_score", 1.0)) / 10.0
+        
+        # 4. Recency Decay (Exponential decay based on timestamp)
+        # We assume timestamp is unix epoch. Half-life of 24 hours (86400s)
+        ts = memory.get("timestamp", time.time())
+        age = max(0, time.time() - ts)
+        recency = math.exp(-age / 86400.0) 
+        
+        # 5. Semantic Score (provided by SemanticMemory if available)
+        s_score = semantic_score if semantic_score is not None else 0.5
+        
+        final_score = (s_score * 0.45) + (overlap * 0.20) + (importance * 0.20) + (reinforcement * 0.10) + (recency * 0.05)
+        return final_score
+
     def multi_stage_recall(self, user_id, query, agent_id="default_agent", top_k=5):
-        """
-        Main entry point for memory recall. 
-        Uses Intent-Driven Retrieval as the primary path.
-        """
         # 0. Intent-Driven Retrieval Pipeline (Primary)
         if self.intent_manager:
             try:
                 print(f"[RecallEngine] Intent-Driven Pipeline: {query[:40]}...")
                 intent_results = self.intent_manager.execute_intent_recall(user_id, query, agent_id)
+                memories = intent_results.get("memories", [])
                 
-                # 4. Rerank for precision
-                if self.reranker and intent_results.get("memories"):
-                    print(f"[RecallEngine] Reranking {len(intent_results['memories'])} intent-results...")
-                    intent_results["memories"] = self.reranker.rerank(query, intent_results["memories"], top_n=top_k)
+                # Apply Unified Scoring
+                for m in memories:
+                    m["unified_score"] = self._calculate_unified_score(query, m)
+                
+                # Sort by unified score
+                memories.sort(key=lambda x: x["unified_score"], reverse=True)
+
+                # 4. Rerank for precision (Process full candidate pool)
+                if self.reranker and memories:
+                    print(f"[RecallEngine] Reranking {len(memories)} intent-results...")
+                    # Take top 100 for reranking
+                    candidates_to_rerank = memories[:100]
+                    intent_results["memories"] = self.reranker.rerank(query, candidates_to_rerank, top_n=top_k)
+                else:
+                    intent_results["memories"] = memories[:top_k]
                 
                 # Apply reinforcement
                 self._reinforce_memories(user_id, intent_results["memories"])
@@ -56,37 +96,49 @@ class RecallEngine:
         if self.predictive:
              prediction = self.predictive.preload_context(user_id, query)
         
-        # 2. Stage 1: Retrieval
-        semantic_results = self.semantic.search(user_id, query, top_k=20) 
-        episodic_candidates = self.episodic.search(user_id, query, agent_id=agent_id, limit=20)
+        # 2. Stage 1: Retrieval (Fetch more candidates)
+        semantic_results = self.semantic.search(user_id, query, top_k=100) 
+        episodic_candidates = self.episodic.search(user_id, query, agent_id=agent_id, limit=100)
         
         candidates = []
         seen = set()
         
         for c in semantic_results:
             if c.get("agent_id") == agent_id or c.get("memory_type") == "shared":
-                # Fetch real content from episodic for the reranker to work!
                 sid = c.get("sqlite_id")
                 if sid:
                     real_m = self.episodic.get_by_id(user_id, sid)
                     if real_m:
                         real_m["source"] = "semantic"
+                        real_m["semantic_score"] = c.get("score", 0.5)
                         candidates.append(real_m)
                         seen.add(real_m["content"])
                 else:
-                    candidates.append({"content": str(c.get("id")), "source": "semantic", "importance": 5.0})
+                    candidates.append({
+                        "content": str(c.get("id")), 
+                        "source": "semantic", 
+                        "importance": c.get("importance", 5.0),
+                        "semantic_score": c.get("score", 0.5)
+                    })
                     seen.add(str(c.get("id")))
                 
         for c in episodic_candidates:
             if c["content"] not in seen:
                 c["source"] = "episodic"
+                c["semantic_score"] = 0.5 # Baseline for purely lexical matches
                 candidates.append(c)
                 seen.add(c["content"])
+
+        # Apply Unified Scoring to candidates
+        for c in candidates:
+            c["unified_score"] = self._calculate_unified_score(query, c, c.get("semantic_score"))
+        
+        candidates.sort(key=lambda x: x["unified_score"], reverse=True)
 
         # 3. Finalization logic (Rerank -> Attention)
         if self.reranker and candidates:
             print(f"[RecallEngine] Reranking {len(candidates)} candidates...")
-            candidates = self.reranker.rerank(query, candidates, top_n=20)
+            candidates = self.reranker.rerank(query, candidates[:100], top_n=top_k)
 
         final_memories = candidates[:top_k]
         if self.attention and candidates:
@@ -117,7 +169,6 @@ class RecallEngine:
             cursor = conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             for m in memories_list:
-                # Handle different formats (builder output vs raw dict)
                 metadata = m.get("metadata", {}) if isinstance(m, dict) else {}
                 m_id = metadata.get("id") or m.get("id")
                 if m_id:

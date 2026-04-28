@@ -20,6 +20,7 @@
 models:
   # Which provider to use: "ollama", "openai", "anthropic", "groq", "nvidia", or "custom"
   provider: "nvidia"
+  embedding_provider: "ollama"
 
   # --- Ollama (Local) ---
   # Any model pulled via `ollama pull <name>` works here.

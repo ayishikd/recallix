@@ -2,17 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from backend.api.middleware.auth import verify_api_key
-from backend.brain.memory.manager import MemoryManager
-from backend.brain.memory.recall_engine import RecallEngine
+from backend.api.deps import get_memory_manager
 from backend.brain.world_model.state_inference import StateInference
 from backend.brain.meta_memory.meta_memory_engine import MetaMemoryEngine
-import sqlite3
-import os
-import json
-import time
 
 router = APIRouter(prefix="/memory", tags=["Public Memory API"])
-memory_manager = MemoryManager()
+memory_manager = get_memory_manager()
 state_inference = StateInference()
 meta_engine = MetaMemoryEngine()
 

@@ -1,6 +1,6 @@
 import json
 import os
-from ..models.model_router import ModelRouter
+from backend.brain.models.model_router import ModelRouter
 
 class PredictionEngine:
     def __init__(self, storage_path="backend/storage/predictive_cache/predictions.json"):

@@ -1,4 +1,6 @@
 import time
+import json
+import sqlite3
 from .recall_engine import RecallEngine
 from ..retrieval.manager import IntentRetrievalManager
 from .short_term.sensory import SensoryMemory
@@ -15,6 +17,7 @@ from ..world_model.planning_engine import PlanningEngine
 from ..attention.attention_controller import AttentionController
 from ..memory_ranking.importance_ranker import ImportanceRanker
 from ..memory_ranking.reranker import NeuralReranker
+from backend.brain.models.model_router import ModelRouter
 
 class MemoryManager:
     def __init__(self):
@@ -24,6 +27,8 @@ class MemoryManager:
         self.semantic = SemanticMemory()
         self.long_term = LongTermMemory()
         self.reflective = ReflectiveMemory()
+        self.model_router = ModelRouter()
+        
         self.predictive = PredictiveRecall(self)
         self.state_inference = StateInference()
         self.timeline = TimelineEngine()
@@ -32,9 +37,7 @@ class MemoryManager:
         self.attention = AttentionController()
         self.reranker = NeuralReranker()
         
-        # New Intent-Driven Retrieval logic
         self.intent_retrieval = IntentRetrievalManager(self)
-        
         self.recall_engine = RecallEngine(self.episodic, self.semantic, self.long_term, self.reflective)
         self.recall_engine.intent_manager = self.intent_retrieval
         self.recall_engine.predictive = self.predictive
@@ -52,23 +55,35 @@ class MemoryManager:
         # ── Stage 1: Sensory Memory ──
         s = time.time()
         self.sensory.add(user_id, message)
-        log("python", "Sensory Buffer", f"Buffered in 60s TTL deque (max 10 items). Input: \"{message[:60]}\"", s)
+        log("python", "Sensory Buffer", f"Buffered in sensory deque.", s)
 
         # ── Stage 2: Working Memory ──
         s = time.time()
         context = self.working.get(user_id)
         self.working.update(user_id, message)
-        ctx_preview = context["summary"][:80] if context.get("summary") else "(empty)"
-        log("python", "Working Memory", f"Active context updated. Previous summary: \"{ctx_preview}\"", s)
+        log("python", "Working Memory", f"Updated with sliding window.", s)
 
-        # ── Stage 3: Importance Scoring ──
+        # ── Stage 3: Schema Tagging (Fix #10: LLM-Assisted) ──
         s = time.time()
-        if skip_llm:
-            importance = 5.0 # Neutral score for speed
-        else:
-            importance = ImportanceRanker.calculate(message, context["summary"])
-        score_label = "LOW" if importance < 4 else ("MEDIUM" if importance < 7 else "HIGH" if importance < 9 else "CRITICAL")
-        log("python", "Importance Scoring", f"ImportanceRanker scored {importance:.1f}/10 ({score_label}). {'[BYPASSED]' if skip_llm else ''}", s)
+        schema_tags = []
+        if not skip_llm:
+            try:
+                prompt = f"""Classify this message into cognitive schemas: [identity, preference, calendar, learning, task, security, social, other].
+Message: "{message}"
+Respond ONLY with a JSON array like ["identity", "preference"]."""
+                llm_res = self.model_router.route("cleanup", prompt)
+                import re
+                match = re.search(r'\[.*\]', llm_res)
+                if match:
+                    schema_tags = json.loads(match.group(0))
+            except: pass
+        if not schema_tags: schema_tags = ["general"]
+        log("ollama", "Schema Tagging", f"Detected: {schema_tags}", s)
+
+        # ── Stage 4: Importance Scoring (Fix #11: LLM-Backed) ──
+        s = time.time()
+        importance = ImportanceRanker.calculate(message, context.get("summary", ""), self.model_router, skip_llm)
+        log("python", "Importance Scoring", f"Score: {importance:.1f}/10", s)
 
         event = {
             "user_id": user_id,
@@ -76,76 +91,36 @@ class MemoryManager:
             "memory_type": memory_type,
             "content": message,
             "timestamp": time.time(),
-            "importance": importance
+            "importance": importance,
+            "metadata": {"schema_tags": schema_tags}
         }
 
-        # ── Stage 4: Episodic Memory ──
+        # ── Stage 5: Episodic Storage ──
         s = time.time()
         episodic_id = self.episodic.store(event)
-        event["id"] = episodic_id # Attach the real DB ID
-        log("python", "Episodic Storage", f"Stored in SQLite with ID={episodic_id}, importance={importance:.1f}.", s)
+        event["id"] = episodic_id
+        log("python", "Episodic Storage", f"Stored in SQLite ID={episodic_id}", s)
 
-        # ── Stage 5: Semantic Embedding ──
+        # ── Stage 6: Semantic Embedding ──
         s = time.time()
         self.semantic.store(
-            user_id, 
-            message, 
-            event["timestamp"], 
-            importance=event["importance"],
-            agent_id=agent_id,
-            memory_type=memory_type,
-            skip_llm=skip_llm,
-            sqlite_id=episodic_id # Pass the real ID
+            user_id, message, event["timestamp"], 
+            importance=importance, agent_id=agent_id, 
+            memory_type=memory_type, sqlite_id=episodic_id
         )
-        log("cpp", "Vector Engine", f"Generated 128D embedding via SemanticMemory. Sent POST /add_vector to C++ VectorEngine (:8080). Cosine similarity index updated.", s)
+        log("cpp", "Vector Engine", f"Indexed in HNSW", s)
 
-        # ── Stage 6: Knowledge Graph ──
-        s = time.time()
-        # requests.post(self.infra_url + "/add_node", json={"id": message, "type": "event"})
-        log("cpp", "Graph Engine", f"[Placeholder] Would add node to knowledge graph via POST /add_node on C++ GraphEngine (:8080).", s)
-
-        # ── Stage 7: Cluster Assignment ──
-        s = time.time()
-        log("cpp", "Clustering", f"[Placeholder] Would trigger clustering via POST /cluster on C++ ClusteringEngine (:8080).", s)
-
-        # ── Stage 8: Schema Tagging ──
-        s = time.time()
-        schema_tags = []
-        msg_lower = message.lower()
-        if any(w in msg_lower for w in ["name", "i am", "i'm"]): schema_tags.append("identity")
-        if any(w in msg_lower for w in ["allergic", "allergy", "prefer", "hate"]): schema_tags.append("preference")
-        if any(w in msg_lower for w in ["meeting", "schedule", "deadline", "next"]): schema_tags.append("calendar")
-        if any(w in msg_lower for w in ["learn", "study", "course", "training"]): schema_tags.append("learning")
-        if not schema_tags: schema_tags.append("general")
-        log("python", "Schema Tagging", f"Detected schemas: {schema_tags}. Tags influence importance multiplier and meta-memory evolution.", s)
-
-        # ── Stage 9: Long-Term Promotion ──
+        # ── Stage 7: Long-Term Promotion ──
         s = time.time()
         promoted = False
-        if event["importance"] > 8:
+        ltm_score = importance * 0.8 + (len(schema_tags) * 0.5)
+        if ltm_score > 7.5:
             self.long_term.promote(user_id, event)
             promoted = True
-            log("python", "Long-Term Promotion", f"🔥 PROMOTED to Long-Term Memory! Importance {importance:.1f} > 8.0 threshold. Ebbinghaus decay applied. Protected from forgetting.", s)
-        else:
-            log("python", "Long-Term Gate", f"Not promoted (importance {importance:.1f} ≤ 8.0 threshold). Stays in Episodic with 30-day decay half-life.", s)
+            log("python", "Long-Term Promotion", f"🔥 PROMOTED! Score {ltm_score:.1f}", s)
 
-        # ── Stage 10: Timeline ──
-        s = time.time()
-        self.timeline.append_event(user_id, message)
-        log("cpp", "Timeline Engine", f"Appended to chronological timeline via POST /append_event on C++ TimelineEngine (:8080). Enables temporal pattern detection.", s)
-
-        # ── Stage 11: State Inference ──
-        s = time.time()
-        if not skip_llm:
-            self.state_inference.infer_and_update(user_id, [event])
-            log("ollama", "State Inference", f"Sent to Llama 3.1:8B via Ollama. LLM infers hidden user states.", s)
-        else:
-            log("python", "State Inference", "[SKIPPED in Audit Mode]", s)
-
-        # ── Stage 12: Processing Summary ──
+        # ── Final Summary ──
         total_ms = round((time.time() - t0) * 1000, 1)
-        log("python", "Pipeline Complete", f"All 12 stages finished in {total_ms}ms. Schemas: {schema_tags}. Promoted: {promoted}. Memory now indexed across {3 + (1 if promoted else 0)} stores.", s)
-
         return {
             "importance": importance,
             "schemas": schema_tags,
@@ -155,38 +130,27 @@ class MemoryManager:
         }
 
     def retrieve(self, user_id, query, agent_id="default_agent"):
-        # 1. Check Sensory Memory first
-        sensory_data = self.sensory.get(user_id)
-        
-        # 2. Working Memory context
-        working_summary = self.working.get(user_id)
-        
-        # 3. Multi-Stage Recall (Layers 3, 4, 5, 6 + Graph)
         recall_results = self.recall_engine.multi_stage_recall(user_id, query, agent_id=agent_id)
-        
-        # 4. Consolidate results for API
-        return {
-            "sensory": sensory_data,
-            "working": working_summary,
-            "intent": recall_results.get("intent"),
-            "confidence": recall_results.get("confidence"),
-            "retrieval_plan": recall_results.get("retrieval_plan"),
-            "context_inference": recall_results.get("context_inference"),
-            "memories": recall_results.get("memories", recall_results.get("final_memories", [])),
-            "episodic": recall_results.get("episodic", []),
-            "semantic": recall_results.get("semantic", []),
-            "long_term": recall_results.get("long_term", []),
-            "prediction": recall_results.get("prediction", {}),
-            "schema_insights": recall_results.get("schema_insights", []),
-            "latency_ms": recall_results.get("latency_ms", 0.0)
-        }
+        return recall_results
 
-    def delete(self, user_id, memory_id):
-        """
-        Deletes a memory across all layers.
-        """
+    def delete(self, user_id, memory_id, vector_id=None):
+        from backend.utils.internal_client import internal_post
+        from backend.utils.paths import get_db_path
+        
         # 1. Episodic
-        self.episodic.delete(user_id, memory_id)
-        # 2. Semantic/Vector (via C++ infra or direct)
-        # 3. Timeline (by content match - simplified)
+        try:
+            db_path = get_db_path("backend/storage/sqlite_db/memory.db")
+            with sqlite3.connect(db_path, timeout=30) as conn:
+                cursor = conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("DELETE FROM episodic_events WHERE id = ? AND user_id = ?", (memory_id, user_id))
+                cursor.execute("DELETE FROM episodic_fts WHERE content_id = ?", (memory_id,))
+                conn.commit()
+        except: pass
+
+        # 2. Vector
+        if vector_id:
+            try:
+                internal_post("http://localhost:8080/remove_vector", {"id": vector_id})
+            except: pass
         return True

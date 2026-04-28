@@ -69,6 +69,37 @@ int main() {
         }
     });
 
+    svr.Post("/remove_vector", [&](const httplib::Request &req, httplib::Response &res) {
+        try {
+            auto j = json::parse(req.body);
+            std::string id = j["id"].get<std::string>();
+            vEngine.removeVector(id);
+            res.set_content("{\"status\":\"ok\"}", "application/json");
+        } catch (std::exception& e) {
+            res.status = 400;
+        }
+    });
+
+    svr.Post("/snapshot/save", [&](const httplib::Request &req, httplib::Response &res) {
+        auto j = json::parse(req.body);
+        std::string path = j.value("path", "memory_snapshot.bin");
+        if (vEngine.saveSnapshot(path)) {
+            res.set_content("{\"status\":\"ok\"}", "application/json");
+        } else {
+            res.status = 500;
+        }
+    });
+
+    svr.Post("/snapshot/load", [&](const httplib::Request &req, httplib::Response &res) {
+        auto j = json::parse(req.body);
+        std::string path = j.value("path", "memory_snapshot.bin");
+        if (vEngine.loadSnapshot(path)) {
+            res.set_content("{\"status\":\"ok\"}", "application/json");
+        } else {
+            res.status = 500;
+        }
+    });
+
     svr.Post("/clear", [&](const httplib::Request &req, httplib::Response &res) {
         vEngine.clear();
         res.set_content("{\"status\":\"ok\", \"message\":\"System cleared\"}", "application/json");
@@ -86,8 +117,19 @@ int main() {
         res.set_content("{\"status\":\"healthy\", \"engine\":\"HNSW+NEON\"}", "application/json");
     });
 
-    std::cout << "✅ Service is running on http://localhost:8080" << std::endl;
-    svr.listen("0.0.0.0", 8080);
+    std::cout << "✅ Service is running on http://127.0.0.1:8080" << std::endl;
+    std::cout << "🔒 Internal Authentication: ENABLED" << std::endl;
+    
+    // Fix #13: Bind to localhost and add shared secret check
+    svr.set_pre_routing_handler([](const httplib::Request& req, httplib::Response& res) {
+        if (req.get_header_value("X-Internal-Key") != "Recallix-Core-8892") {
+            res.status = 401;
+            return httplib::Server::HandlerResponse::Handled;
+        }
+        return httplib::Server::HandlerResponse::Unhandled;
+    });
+
+    svr.listen("127.0.0.1", 8080);
 
     return 0;
 }

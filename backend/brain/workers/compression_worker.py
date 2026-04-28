@@ -1,7 +1,7 @@
 import os
 import json
 import time
-from ..models.model_router import ModelRouter
+from backend.brain.models.model_router import ModelRouter
 
 class CompressionWorker:
     def __init__(self, storage_path="backend/storage/conversation_summaries/"):

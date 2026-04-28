@@ -32,7 +32,11 @@ class MemoryRouter:
                     
                     if episodic_match:
                         c["content"] = episodic_match["content"]
-                        c["importance"] = episodic_match.get("importance", 5.0)
+                        # Fix #12: Shared Memory Boosting
+                        m_importance = episodic_match.get("importance", 5.0)
+                        if c.get("memory_type") == "shared":
+                            m_importance *= 1.2 # 20% boost for shared memories
+                        c["importance"] = m_importance
                         resolved.append(c)
             results["semantic"] = resolved
 
