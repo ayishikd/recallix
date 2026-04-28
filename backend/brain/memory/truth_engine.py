@@ -15,13 +15,20 @@ class TruthEngine:
         if not ranked_memories:
             return [], "NO_MATCH"
 
-        # 1. Sort by Score + Recency (Tie-breaker for evolving truths)
-        # We sort primarily by unified_score (desc) and secondarily by timestamp (desc)
-        ranked_memories.sort(key=lambda x: (x.get("unified_score", 0.0), x.get("timestamp", 0.0)), reverse=True)
+        # 1. Sort by Hop Priority + Score + Recency
+        # We prioritize facts discovered via Reasoning Engine (is_hop_result)
+        ranked_memories.sort(key=lambda x: (
+            x.get("is_hop_result", False),
+            x.get("unified_score", 0.0), 
+            x.get("timestamp", 0.0)
+        ), reverse=True)
 
         # 2. Hard Abstention Gate (Squelch Hallucinations)
-        top_score = ranked_memories[0].get("unified_score", 0.0)
-        if top_score < self.threshold:
+        top_mem = ranked_memories[0]
+        top_score = top_mem.get("unified_score", 0.0)
+        is_reasoned = top_mem.get("is_hop_result", False)
+        
+        if top_score < self.threshold and not is_reasoned:
             print(f"[TruthEngine] Abstaining: Top score {top_score:.2f} below threshold {self.threshold:.2f}")
             return [], "UNCERTAIN"
 

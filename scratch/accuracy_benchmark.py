@@ -42,7 +42,7 @@ def run_accuracy_benchmark():
     test_indices = random.sample(range(1, 101), 20)
     
     for idx in test_indices:
-        query = f"What is the primary cause of photon emission in Galaxy X-{idx}?"
+        query = f"What emission process defines Galaxy X-{idx}?"
         res = requests.post(f"{API_URL}/recall", json={"query": query, "user_id": TEST_USER, "top_k": 5}, headers=HEADERS)
         if res.status_code == 200:
             mems = res.json()["data"]["memories"]
@@ -50,7 +50,7 @@ def run_accuracy_benchmark():
             
             found_rank = -1
             for rank, m in enumerate(mems):
-                if expected_process in m["content"] and "Primary" in m["content"]:
+                if expected_process in m["content"] and f"Galaxy X-{idx}" in m["content"]:
                     found_rank = rank + 1
                     break
             

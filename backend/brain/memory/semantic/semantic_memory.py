@@ -81,3 +81,11 @@ class SemanticMemory:
         try:
             internal_post(f"{self.infra_url}/clear", {})
         except: pass
+
+    def compute_similarity(self, query, text):
+        """Compute cosine similarity between query and target text."""
+        q_vec = self._get_embedding(query)
+        t_vec = self._get_embedding(text)
+        
+        # Dot product of normalized vectors = Cosine Similarity
+        return np.dot(q_vec, t_vec)

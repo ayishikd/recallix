@@ -91,13 +91,24 @@ Respond ONLY with a JSON object like: {{
         else:
             # High-speed Regex Fallback for symbolic facts (Fix #25)
             import re
-            e_match = re.search(r"\b(Galaxy X-\d+|Project [A-Z][a-z]+)\b", message, re.IGNORECASE)
+            e_match = re.search(r"\b(Galaxy X-\d+|Project [A-Z][a-z]+|X-\d+|Starship [A-Z][a-z]+)\b", message, re.IGNORECASE)
             if e_match:
-                entities = [{"type": "symbolic", "id": e_match.group(1)}]
+                # Canonicalize ID: lower case, strip prefixes and non-alphanumerics
+                raw_id = e_match.group(1).lower()
+                clean_id = re.sub(r"^(galaxy|project|starship|patient|user|pulsar)\s+", "", raw_id, flags=re.IGNORECASE).strip()
+                canonical_id = re.sub(r"[^a-z0-9]+", "", clean_id)
+                entities = [{"type": "symbolic", "id": canonical_id}]
             
-            r_match = re.search(r"\b(primary emission|status|location|security|primary cause)\b", message, re.IGNORECASE)
+            r_match = re.search(r"\b(primary emission|secondary signature|primary cause|safety status|core state|safety|core|status|phase|state)\b", message, re.IGNORECASE)
             if r_match:
-                norm_rel = r_match.group(1).lower().replace(" ", "_")
+                # Normalize specific keywords to their canonical relation types
+                kw = r_match.group(1).lower()
+                if kw in ["safety", "core", "status", "safety status"]:
+                    norm_rel = "safety_status"
+                elif kw in ["phase", "state", "core state"]:
+                    norm_rel = "state_phase"
+                else:
+                    norm_rel = kw.replace(" ", "_")
                 relations = [{"type": norm_rel}]
 
         if not schema_tags: schema_tags = ["general"]

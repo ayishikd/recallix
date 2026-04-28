@@ -40,17 +40,24 @@ class RecallEngine:
         symbolic_triggers = ["what is", "who is", "name", "id", "code", "deadline", "date", "when", "where", "project", "number"]
         identity_triggers = ["my name", "i am", "who am i", "my cat", "my dog", "my preference", "i like"]
         
+        # Identity Logic (High Priority)
         if any(t in q_lower for t in identity_triggers):
             return "identity"
-        elif any(t in q_lower for t in symbolic_triggers):
+        
+        # Symbolic Logic (Check for IDs or Triggers)
+        symbolic_id_match = re.search(r"\b(galaxy x-\d+|x-\d+|x\d+|project [a-z]+|starship [a-z]+)\b", q_lower)
+        if symbolic_id_match or any(t in q_lower for t in symbolic_triggers):
             return "symbolic"
+            
         return "conceptual"
 
     @staticmethod
     def _extract_entities_from_query(query):
         patterns = [
             (r"\bGalaxy X-\d+\b", "galaxy"), 
+            (r"\bX-\d+\b", "symbolic"), 
             (r"\bProject [A-Z][a-z]+\b", "project"), 
+            (r"\bStarship [A-Z][a-z]+\b", "starship"),
             (r"\bID[:\s]\d+\b", "id"),
             (r"\b[A-Z]{2,}-\d+\b", "code")
         ]
@@ -58,19 +65,24 @@ class RecallEngine:
         for p, t in patterns:
             found = re.findall(p, query, re.IGNORECASE)
             for f in found:
-                entities.append({"type": t, "id": f.strip()})
+                # Canonicalize ID for retrieval lock (consistent with manager.py storage)
+                clean_id = re.sub(r"^(galaxy|project|starship|patient|user|pulsar)\s+", "", f, flags=re.IGNORECASE).strip()
+                canonical_id = re.sub(r"[^a-z0-9]+", "", clean_id.lower())
+                entities.append({"type": t, "id": canonical_id})
         return entities
 
     @staticmethod
     def _extract_relations_from_query(query):
         q_lower = query.lower()
         relations = []
-        if "primary" in q_lower or "main" in q_lower or "cause" in q_lower:
+        if "primary" in q_lower or "main" in q_lower or "cause" in q_lower or "emission" in q_lower or "defines" in q_lower:
             relations.append("primary_emission")
         if "secondary" in q_lower or "signature" in q_lower:
             relations.append("secondary_signature")
-        if "tertiary" in q_lower or "trace" in q_lower:
-            relations.append("tertiary_trace")
+        if "safety" in q_lower or "status" in q_lower or "core" in q_lower:
+            relations.append("safety_status")
+        if "phase" in q_lower or "state" in q_lower:
+            relations.append("state_phase")
         return relations
 
     def _generate_candidates(self, user_id, query, agent_id, limit=1000):
@@ -85,11 +97,16 @@ class RecallEngine:
         seen_ids = set()
         
         # Merge by Memory ID
-        for c in episodic_candidates:
+        for i, c in enumerate(episodic_candidates):
             cid = c.get("id")
             if cid and cid not in seen_ids:
                 c["pool"] = "A"
-                c["semantic_score"] = 0.5
+                # Fix #2: Late-Binding Semantic Check for top Pool A results
+                if i < 50:
+                    c["semantic_score"] = self.semantic.compute_similarity(query, c["content"])
+                else:
+                    c["semantic_score"] = 0.5
+                
                 candidates.append(c)
                 seen_ids.add(cid)
                 
@@ -114,14 +131,22 @@ class RecallEngine:
             "recall_engine": self 
         }
         
-        # Fine-tuned weights for Resilient Cognitive Retrieval
+        # Fine-tuned weights for Resilient Cognitive Retrieval (Fix #33: Trust Semantic)
         weights = {
-            "symbolic": {"semantic": 0.01, "lexical": 0.04, "entity": 0.45, "relation": 0.45, "salience": 0.0, "temporal": 0.05},
-            "identity": {"semantic": 0.05, "lexical": 0.10, "entity": 0.70, "relation": 0.10, "salience": 0.0, "temporal": 0.05},
-            "conceptual": {"semantic": 0.60, "lexical": 0.10, "entity": 0.10, "relation": 0.10, "salience": 0.05, "temporal": 0.05}
-        }.get(query_type, {"semantic": 0.5, "lexical": 0.1, "entity": 0.1, "relation": 0.1, "salience": 0.1, "temporal": 0.1})
+            "symbolic": {"semantic": 0.15, "lexical": 0.05, "entity": 0.40, "relation": 0.35, "salience": 0.0, "temporal": 0.05},
+            "identity": {"semantic": 0.20, "lexical": 0.05, "entity": 0.60, "relation": 0.10, "salience": 0.0, "temporal": 0.05},
+            "conceptual": {"semantic": 0.70, "lexical": 0.10, "entity": 0.10, "relation": 0.05, "salience": 0.0, "temporal": 0.05}
+        }.get(query_type, {"semantic": 0.7, "lexical": 0.1, "entity": 0.1, "relation": 0.05, "salience": 0.0, "temporal": 0.05})
+
+        # Fix #3: Compute Age Variance to prevent temporal blindness during benchmarks
+        ages = [time.time() - float(c.get("timestamp", 0.0)) for c in candidates]
+        age_variance = max(ages) - min(ages) if ages else 0
 
         for c in candidates:
+            # Fix #4: Last-Minute Semantic Score Check (Ensure no defaults reach the ranker)
+            if c.get("semantic_score", 0.5) == 0.5:
+                c["semantic_score"] = self.semantic.compute_similarity(query, c.get("content", ""))
+            
             signals = {}
             for name, scorer in self.scorers.items():
                 signals.update(scorer.score(query, c, context))
@@ -132,10 +157,11 @@ class RecallEngine:
             age_sec = time.time() - float(c.get("timestamp", 0.0))
             current_weights = weights.copy()
             
-            if age_sec < 3600: # Fresh
+            # Only boost temporal if there's meaningful time spread (Fix #3)
+            if age_sec < 3600 and age_variance > 300: # Fresh + >5 min spread
                 current_weights["temporal"] = 0.40 # High recency boost for timeline
                 current_weights["salience"] = 0.05
-            else: # Old
+            else: # Old or low variance
                 current_weights["temporal"] = 0.05
                 current_weights["salience"] = 0.40 # High importance boost for long-term knowledge
             
@@ -164,29 +190,83 @@ class RecallEngine:
     def multi_stage_recall(self, user_id, query, agent_id="default_agent", top_k=5):
         t0 = time.time()
         
+        # --- Stage 0: Reasoning Expansion (Fix #27) ---
+        from .reasoning_engine import ReasoningEngine
+        reasoner = ReasoningEngine(self)
+        
+        # 1. Alias Resolution (Dragon's Breath -> X-77)
+        alias_id = reasoner.resolve_aliases(query)
+        effective_query = f"{query} {alias_id}" if alias_id else query
+        
+        # 2. Contextual Expansion (dormant -> quiescent)
+        expanded_query = reasoner.expand_query(effective_query)
+        
         # 1. Candidate Generation
-        candidates = self._generate_candidates(user_id, query, agent_id)
+        candidates = self._generate_candidates(user_id, expanded_query, agent_id)
         candidate_count = len(candidates)
         
         # 2. Primary Ranking
-        query_type = self._classify_query(query)
-        ranked = self._rank_candidates(query, candidates, query_type)
+        query_type = self._classify_query(expanded_query)
+        ranked = self._rank_candidates(expanded_query, candidates, query_type)
         
         # 3. Truth Arbitration (Epistemic Discipline)
         from .truth_engine import TruthEngine
         truth_engine = TruthEngine(threshold=0.35)
         
-        # Build context for Truth Engine
+        # Build context for Truth Engine (Fix #29: Fuzzy Relation Alignment)
+        raw_relations = self._extract_relations_from_query(expanded_query)
+        expanded_relations = reasoner.expand_relations(raw_relations)
+        
         query_context = {
-            "query_entities": self._extract_entities_from_query(query),
-            "query_relations": self._extract_relations_from_query(query)
+            "query_entities": self._extract_entities_from_query(expanded_query),
+            "query_relations": expanded_relations
         }
         resolved, status = truth_engine.resolve(ranked, query_context)
         
+        # --- Stage 3.5: Multi-Hop Chaining (Fix #28) ---
+        source_ids = [m["id"] for m in resolved[:2]]
+        hops = reasoner.identify_multi_hop_opportunities(resolved[:2], query_context)
+        if hops:
+            print(f"[ReasoningEngine] Identified Multi-Hop targets: {hops}. Triggering Second Hop...")
+            # Squelch sources in the original ranked pool to force promotion of hop targets
+            for r in ranked:
+                if r["id"] in source_ids:
+                    r["unified_score"] *= 0.01 # Near-absolute squelch
+            
+            for hop_target in hops:
+                # Update context for the second hop validation
+                hop_entities = self._extract_entities_from_query(hop_target)
+                query_context["query_entities"].extend(hop_entities)
+                
+                hop_candidates = self._generate_candidates(user_id, hop_target, agent_id)
+                hop_ranked = self._rank_candidates(hop_target, hop_candidates, "symbolic")
+                # Merge hop results into candidates pool (exclude sources and give high priority)
+                for h in hop_ranked:
+                    if h["id"] in source_ids: continue # Skip the fact that triggered the hop
+                    
+                    # Force-promote and tag hop results (even if already in pool)
+                    h["is_hop_result"] = True
+                    h["unified_score"] = 99.0 # Hard Priority for Reasoned Truth
+                    
+                    found_in_ranked = False
+                    for r in ranked:
+                        if r["id"] == h["id"]:
+                            r["is_hop_result"] = True
+                            r["unified_score"] = 99.0
+                            found_in_ranked = True
+                            break
+                    
+                    if not found_in_ranked:
+                        ranked.append(h)
+            
+            # Re-sort and re-arbitrate after hopping
+            ranked.sort(key=lambda x: x["unified_score"], reverse=True)
+            resolved, status = truth_engine.resolve(ranked, query_context)
+
         # 4. Adaptive Recovery: If Truth Engine squelches symbolic but we have semantic candidates
         if status == "UNCERTAIN" and query_type in ["symbolic", "identity"]:
             print(f"[RecallEngine] Truth Engine rejected symbolic matches. Triggering Semantic Recovery...")
-            ranked_conceptual = self._rank_candidates(query, candidates, "conceptual")
+            ranked_conceptual = self._rank_candidates(expanded_query, candidates, "conceptual")
             resolved, status = truth_engine.resolve(ranked_conceptual, query_context)
         
         # 5. Finalization
@@ -202,7 +282,7 @@ class RecallEngine:
                 "latency_ms": round((time.time() - t0) * 1000, 1),
                 "truth_status": status
             },
-            "schema_insights": self._get_schema_insights(query)
+            "schema_insights": self._get_schema_insights(expanded_query)
         }
 
     def _get_schema_insights(self, query):

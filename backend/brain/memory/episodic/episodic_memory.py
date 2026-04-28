@@ -93,62 +93,61 @@ class EpisodicMemory:
         cursor = conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         
-        # 1. Identify query entities for targeted indexing
-        entity_list = re.findall(r"\bGalaxy X-\d+\b|\bProject [A-Z][a-z]+\b|\bID[:\s]\d+\b|\b[A-Z]{2,}-\d+\b", query, re.IGNORECASE)
-        
+        # 1. Identity Recognition
+        entity_list = re.findall(r"\bGalaxy X-\d+\b|\bProject [A-Z][a-z]+\b|\bID[:\s]\d+\b|\b[A-Z]{2,}-\d+\b|\bx-?\d+\b", query, re.IGNORECASE)
+        canonical_query_id = None
         if entity_list:
-            # Broad search for entity components
-            entity_tokens = []
-            for e in entity_list:
-                clean_e = re.sub(r"[^a-zA-Z0-9]+", " ", e).strip()
-                if clean_e:
-                    entity_tokens.append(f"({clean_e})")
-            fts_query = ' OR '.join(entity_tokens)
-        else:
-            tokens = [f'"{w}"' for w in query.replace('"', '').split() if len(w) > 2]
-            fts_query = ' OR '.join(tokens) if tokens else "*"
+            clean_e = re.sub(r"^(galaxy|project|starship|pulsar)\s+", "", entity_list[0], flags=re.IGNORECASE).strip()
+            canonical_query_id = re.sub(r"[^a-z0-9]+", "", clean_e.lower())
 
-        # Kernel v2: Filter for ACTIVE status unless explicit history requested
-        status_filter = "AND e.status = 'ACTIVE'" if not include_obsolete else ""
+        status_filter = "AND status = 'ACTIVE'" if not include_obsolete else ""
+        results_map = {}
+
+        # Path A: Deterministic Symbolic Lookup (High Precision)
+        if canonical_query_id:
+            cursor.execute(f"SELECT * FROM episodic_events WHERE user_id = ? AND (entity_id LIKE ? OR entity_id = ?) {status_filter} LIMIT ?", 
+                           (user_id, f"%{canonical_query_id}%", canonical_query_id, limit))
+            for r in cursor.fetchall():
+                m = self._row_to_dict(r)
+                m["symbolic_match"] = True
+                m["bm25_score"] = -10.0 # Force high priority
+                results_map[m["id"]] = m
+
+        # Path B: Lexical FTS5 Search (Broad Recall)
+        tokens = [f'"{re.sub(r"[^a-zA-Z0-9]+", " ", w).strip()}"' for w in query.replace('"', '').split() if len(w) > 2]
+        fts_query = ' OR '.join(tokens) if tokens else "*"
         
-        sql = f"""
+        cursor.execute(f"""
             SELECT e.*, f.bm25_score 
             FROM episodic_events e
-            JOIN (SELECT content_id, bm25(episodic_fts) as bm25_score FROM episodic_fts WHERE episodic_fts MATCH ? AND user_id = ?) f
-            ON e.id = f.content_id
-            WHERE e.user_id = ? {status_filter}
-        """
-        params = [fts_query, user_id, user_id]
+            JOIN (
+                SELECT content_id, bm25(episodic_fts) as bm25_score 
+                FROM episodic_fts 
+                WHERE episodic_fts MATCH ? AND user_id = ?
+            ) f ON e.id = f.content_id
+            WHERE e.user_id = ? {status_filter.replace('status', 'e.status')}
+        """, (fts_query, user_id, user_id))
         
-        print(f"🔍 [EpisodicSearch] SQL: {sql}")
-        print(f"🔍 [EpisodicSearch] Params: {params}")
+        for r in cursor.fetchall():
+            m = self._row_to_dict(r)
+            m["bm25_score"] = r[-1]
+            m["symbolic_match"] = False
+            if m["id"] not in results_map:
+                results_map[m["id"]] = m
         
-        if agent_id:
-            sql += " AND (e.agent_id = ? OR e.memory_type = 'shared')"
-            params.append(agent_id)
-            
-        sql += " ORDER BY bm25_score ASC LIMIT ?" # bm25() returns negative values (more negative = better match)
-        params.append(limit)
-        
-        cursor.execute(sql, params)
-        rows = cursor.fetchall()
-        
-        results = []
-        for r in rows:
-            # Kernel v2: Index 13 is bm25_score (after id, user, agent, type, content, ts, imp, reinf, count, meta, ent, rel, status)
-            raw_bm25 = r[13]
-            bm25_positive = abs(raw_bm25) if raw_bm25 else 0.0
-            
-            results.append({
-                "id": r[0], "user_id": r[1], "agent_id": r[2],
-                "memory_type": r[3], "content": r[4], "timestamp": r[5],
-                "importance": r[6], "reinforcement_score": r[7],
-                "metadata": r[9],
-                "entity_id": r[10], "relation_type": r[11], "status": r[12],
-                "bm25_score": bm25_positive
-            })
         conn.close()
-        return results
+        return list(results_map.values())
+
+    def _row_to_dict(self, row):
+        # Helper to convert SQLite row to episodic dictionary (Kernel v2 Alignment)
+        return {
+            "id": row[0], "user_id": row[1], "agent_id": row[2],
+            "memory_type": row[3], "content": row[4], "timestamp": row[5],
+            "importance": row[6], "reinforcement_score": row[7],
+            "retrieval_count": row[8],
+            "metadata": row[9], "entity_id": row[10], "relation_type": row[11],
+            "status": row[12]
+        }
 
     def cleanup_low_importance_memories(self, user_id, age_days=7):
         """
@@ -183,7 +182,8 @@ class EpisodicMemory:
         conn = sqlite3.connect(self.db_path, timeout=30)
         cursor = conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("SELECT * FROM episodic_events WHERE id = ? AND user_id = ?", (memory_id, user_id))
+        # Kernel v2: Ensure we only fetch ACTIVE memories, even by direct ID
+        cursor.execute("SELECT * FROM episodic_events WHERE id = ? AND user_id = ? AND status = 'ACTIVE'", (memory_id, user_id))
         r = cursor.fetchone()
         conn.close()
         if r:
@@ -191,6 +191,7 @@ class EpisodicMemory:
                 "id": r[0], "user_id": r[1], "agent_id": r[2],
                 "memory_type": r[3], "content": r[4], "timestamp": r[5],
                 "importance": r[6], "reinforcement_score": r[7],
-                "metadata": r[9] # r[8] is retrieval_count
+                "metadata": r[9],
+                "entity_id": r[10], "relation_type": r[11], "status": r[12]
             }
         return None
