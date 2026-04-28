@@ -83,7 +83,45 @@ class RecallEngine:
             relations.append("safety_status")
         if "phase" in q_lower or "state" in q_lower:
             relations.append("state_phase")
+        if "secret project code" in q_lower or "secret" in q_lower or "code" in q_lower:
+            relations.append("secret_code")
         return relations
+
+    def _infer_slot(self, query):
+        entities = self._extract_entities_from_query(query)
+        relations = self._extract_relations_from_query(query)
+        
+        relation_map = {
+            "code": "secret_code",
+            "project code": "secret_code",
+            "secret project code": "secret_code",
+            "primary emission": "primary_emission",
+            "primary cause": "primary_emission",
+            "secondary signature": "secondary_signature",
+            "safety status": "safety_status",
+            "safety": "safety_status",
+            "core": "safety_status",
+            "status": "safety_status",
+            "core state": "state_phase",
+            "state": "state_phase",
+            "phase": "state_phase"
+        }
+        entity_map = {
+            "the project": "project"
+        }
+        
+        if entities and relations:
+            e = entities[0].get("id", "") if isinstance(entities[0], dict) else entities[0]
+            r = relations[0].get("type", "") if isinstance(relations[0], dict) else relations[0]
+            
+            e_norm = entity_map.get(e.lower(), e.lower())
+            r_norm = relation_map.get(r.lower(), r.lower())
+            
+            e_norm = re.sub(r"[^a-z0-9_]+", "", e_norm)
+            r_norm = re.sub(r"[^a-z0-9_]+", "", r_norm)
+            
+            return f"{e_norm}::{r_norm}"
+        return None
 
     def _generate_candidates(self, user_id, query, agent_id, limit=1000):
         """Stage 1: Broad Recall (Nuclear Depth)"""
@@ -213,7 +251,26 @@ class RecallEngine:
         expanded_query = reasoner.expand_query(effective_query)
         
         # 1. Candidate Generation
+        query_slot_id = self._infer_slot(expanded_query)
         candidates = self._generate_candidates(user_id, expanded_query, agent_id)
+        
+        # 1.5 Query -> Slot Inference Bias
+        if query_slot_id:
+            slot_candidates = []
+            for c in candidates:
+                metadata = c.get("metadata", {})
+                if isinstance(metadata, str):
+                    try: metadata = json.loads(metadata)
+                    except: metadata = {}
+                
+                slots = metadata.get("slots", [])
+                if isinstance(slots, list) and any(s.get("slot_id") == query_slot_id for s in slots):
+                    slot_candidates.append(c)
+            
+            if slot_candidates:
+                print(f"[RecallEngine] Slot Inference Matched: {query_slot_id}. Biasing retrieval to {len(slot_candidates)} exact matches.")
+                candidates = slot_candidates
+                
         candidate_count = len(candidates)
         
         # 2. Primary Ranking
@@ -310,6 +367,7 @@ class RecallEngine:
             "status": status,
             "memories": final_memories,
             "debug": {
+                "inferred_slot_id": query_slot_id,
                 "semantic_hits": candidate_count,
                 "after_filter": len(ranked),
                 "after_truth": len(resolved),

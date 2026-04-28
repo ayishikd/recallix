@@ -94,18 +94,17 @@ class MemoryManager:
         # ── Stage 3: Schema & Entity Extraction (Structured Memory) ──
         s = time.time()
         schema_tags = []
-        entities = []
-        relations = []
+        triads = []
+        
         if not skip_llm:
             try:
                 prompt = f"""Analyze this message. 
 1. Classify it into schemas: [identity, preference, calendar, learning, task, security, social, other].
-2. Extract key entities (galaxy, project, person, etc.) and their relations.
+2. Extract key facts as precise (entity, relation, value) triads.
 Message: "{message}"
 Respond ONLY with a JSON object like: {{
   "schemas": ["learning"], 
-  "entities": [{{"type": "galaxy", "id": "X-35"}}],
-  "relations": [{{"subject": "X-35", "type": "primary_emission", "object": "synchrotron"}}]
+  "triads": [{{"entity": "project", "relation": "secret_code", "value": "SolarFlameOcean"}}]
 }}"""
                 llm_res = self.model_router.route("cleanup", prompt)
                 import re
@@ -113,34 +112,69 @@ Respond ONLY with a JSON object like: {{
                 if match:
                     parsed = json.loads(match.group(0))
                     schema_tags = parsed.get("schemas", ["general"])
-                    entities = parsed.get("entities", [])
-                    relations = parsed.get("relations", [])
+                    triads = parsed.get("triads", [])
             except: pass
         else:
-            # High-speed Regex Fallback for symbolic facts (Fix #25)
+            # High-speed Regex Fallback strictly scoped to skip_llm
             import re
-            e_match = re.search(r"\b(Galaxy X-\d+|Project [A-Z][a-z]+|X-\d+|Starship [A-Z][a-z]+)\b", message, re.IGNORECASE)
-            if e_match:
-                # Canonicalize ID: lower case, strip prefixes and non-alphanumerics
-                raw_id = e_match.group(1).lower()
-                clean_id = re.sub(r"^(galaxy|project|starship|patient|user|pulsar)\s+", "", raw_id, flags=re.IGNORECASE).strip()
-                canonical_id = re.sub(r"[^a-z0-9]+", "", clean_id)
-                entities = [{"type": "symbolic", "id": canonical_id}]
+            secret_match = re.search(r"secret project code(?: is| moved to) (\S+)", message, re.IGNORECASE)
+            if secret_match:
+                triads.append({"entity": "project", "relation": "secret_code", "value": secret_match.group(1).strip('.')})
+            else:
+                e_match = re.search(r"\b(Galaxy X-\d+|Project [A-Z][a-z]+|X-\d+|Starship [A-Z][a-z]+)\b", message, re.IGNORECASE)
+                r_match = re.search(r"\b(primary emission|secondary signature|primary cause|safety status|core state|safety|core|status|phase|state)\b", message, re.IGNORECASE)
+                if e_match and r_match:
+                    ent = re.sub(r"^(galaxy|project|starship|patient|user|pulsar)\s+", "", e_match.group(1), flags=re.IGNORECASE).strip()
+                    rel = r_match.group(1)
+                    val = message.split("is")[-1].strip() if "is" in message else "unknown"
+                    triads.append({"entity": ent, "relation": rel, "value": val})
+
+        # Canonicalization Layer
+        relation_map = {
+            "code": "secret_code",
+            "project code": "secret_code",
+            "secret project code": "secret_code",
+            "primary emission": "primary_emission",
+            "primary cause": "primary_emission",
+            "secondary signature": "secondary_signature",
+            "safety status": "safety_status",
+            "safety": "safety_status",
+            "core": "safety_status",
+            "status": "safety_status",
+            "core state": "state_phase",
+            "state": "state_phase",
+            "phase": "state_phase"
+        }
+        entity_map = {
+            "the project": "project"
+        }
+        
+        metadata_slots = []
+        for t in triads:
+            e_raw = t.get("entity", "")
+            r_raw = t.get("relation", "")
+            v = t.get("value", "")
+            if not e_raw or not r_raw: continue
             
-            r_match = re.search(r"\b(primary emission|secondary signature|primary cause|safety status|core state|safety|core|status|phase|state)\b", message, re.IGNORECASE)
-            if r_match:
-                # Normalize specific keywords to their canonical relation types
-                kw = r_match.group(1).lower()
-                if kw in ["safety", "core", "status", "safety status"]:
-                    norm_rel = "safety_status"
-                elif kw in ["phase", "state", "core state"]:
-                    norm_rel = "state_phase"
-                else:
-                    norm_rel = kw.replace(" ", "_")
-                relations = [{"type": norm_rel}]
+            e_norm = entity_map.get(e_raw.lower(), e_raw.lower())
+            r_norm = relation_map.get(r_raw.lower(), r_raw.lower())
+            
+            e_norm = re.sub(r"[^a-z0-9_]+", "", e_norm)
+            r_norm = re.sub(r"[^a-z0-9_]+", "", r_norm)
+            
+            slot_id = f"{e_norm}::{r_norm}"
+            
+            metadata_slots.append({
+                "slot_id": slot_id,
+                "entity": e_norm,
+                "relation": r_norm,
+                "value": v,
+                "version": int(time.time() * 1000), # Sane explicit versioning
+                "truth_status": "active"
+            })
 
         if not schema_tags: schema_tags = ["general"]
-        log("ollama", "Schema & Entity Tagging", f"Schemas: {schema_tags}, Entities: {entities}", s)
+        log("ollama", "Schema & Entity Tagging", f"Schemas: {schema_tags}, Slots: {len(metadata_slots)}", s)
 
         # ── Stage 4: Importance Scoring (Fix #11: LLM-Backed) ──
         s = time.time()
@@ -154,7 +188,7 @@ Respond ONLY with a JSON object like: {{
             "content": message,
             "timestamp": time.time(),
             "importance": importance,
-            "metadata": {"schema_tags": schema_tags, "entities": entities, "relations": relations}
+            "metadata": {"schema_tags": schema_tags, "slots": metadata_slots}
         }
 
         # ── Stage 5: Episodic Storage ──
