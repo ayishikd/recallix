@@ -22,14 +22,15 @@ def get_llm_response(task_type, prompt):
         print(f"   ❌ LLM Error: {e}")
         return ""
 
-def store_memory(agent_id, content, m_type="shared"):
+def store_memory(agent_id, content, m_type="shared", sync_index=True):
     payload = {
         "content": content,
         "agent_id": agent_id,
         "memory_type": m_type,
-        "user_id": "test_user_multi"
+        "user_id": "test_user_multi",
+        "skip_llm": True,
+        "sync_index": sync_index
     }
-    # No skip_llm=True here because we want the LLM to actually think for this test
     res = requests.post(f"{API_URL}/store", json=payload, headers=HEADERS)
     return res.status_code == 200
 
@@ -37,7 +38,8 @@ def recall_memory(agent_id, query):
     payload = {
         "query": query,
         "agent_id": agent_id,
-        "user_id": "test_user_multi"
+        "user_id": "test_user_multi",
+        "limit": 5
     }
     res = requests.post(f"{API_URL}/recall", json=payload, headers=HEADERS)
     if res.status_code == 200:
@@ -67,7 +69,7 @@ def run_multi_agent_benchmark():
         "The secret project code is OMEGA-VOID"
     ]
     for d in distractors:
-        requests.post(f"{API_URL}/store", json={"content": d, "agent_id": "system", "memory_type": "shared", "user_id": "test_user_multi"}, headers=HEADERS)
+        requests.post(f"{API_URL}/store", json={"content": d, "agent_id": "system", "memory_type": "shared", "user_id": "test_user_multi", "skip_llm": True, "sync_index": False}, headers=HEADERS)
     
     start_store = time.time()
     store_memory("llama_agent", f"The secret project code is {secret_fact}", m_type="shared")

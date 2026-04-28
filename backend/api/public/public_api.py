@@ -17,18 +17,29 @@ meta_engine = MetaMemoryEngine()
 class StoreRequest(BaseModel):
     content: str
     user_id: Optional[str] = None
+    agent_id: Optional[str] = "default_agent"
+    memory_type: Optional[str] = "private"
     metadata: Optional[dict] = None
     skip_llm: Optional[bool] = False
+    sync_index: Optional[bool] = False
 
 class RecallRequest(BaseModel):
     query: str
     user_id: Optional[str] = None
+    agent_id: Optional[str] = "default_agent"
     limit: Optional[int] = 10
 
 @router.post("/store")
 async def store_memory(request: StoreRequest, auth=Depends(verify_api_key)):
     user_id = request.user_id or auth["user_id"]
-    result = memory_manager.store(user_id, request.content, skip_llm=request.skip_llm)
+    result = memory_manager.store(
+        user_id, 
+        request.content, 
+        agent_id=request.agent_id,
+        memory_type=request.memory_type,
+        skip_llm=request.skip_llm,
+        sync_index=request.sync_index
+    )
     return {
         "status": "success",
         "data": {
@@ -45,7 +56,7 @@ async def store_memory(request: StoreRequest, auth=Depends(verify_api_key)):
 @router.post("/recall")
 async def recall_memory(request: RecallRequest, auth=Depends(verify_api_key)):
     user_id = request.user_id or auth["user_id"]
-    results = memory_manager.retrieve(user_id, request.query)
+    results = memory_manager.retrieve(user_id, request.query, agent_id=request.agent_id, limit=request.limit)
     
     return {
         "status": "success",
@@ -56,7 +67,8 @@ async def recall_memory(request: RecallRequest, auth=Depends(verify_api_key)):
             "retrieval_plan": results.get("retrieval_plan", {}),
             "context_inference": results.get("context_inference", {}),
             "schema_insights": results.get("schema_insights", []),
-            "latency_ms": results.get("latency_ms", 0.0)
+            "latency_ms": results.get("latency_ms", 0.0),
+            "debug": results.get("debug", {})
         },
         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }

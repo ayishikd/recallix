@@ -32,27 +32,56 @@ class TruthEngine:
             print(f"[TruthEngine] Abstaining: Top score {top_score:.2f} below threshold {self.threshold:.2f}")
             return [], "UNCERTAIN"
 
-        # 2. Temporal Slot Arbitration
-        # We group by (Entity, Relation) and only keep the latest valid fact.
-        resolved_memories = []
-        seen_slots = set()
-
+        # 3. Temporal Slot Arbitration (State Transitions)
+        import math
+        now = time.time()
+        tau = 86400 * 7 # 1 week
+        
+        slot_groups = {}
         for mem in ranked_memories:
-            # Extract symbolic slot (Entity + Relation)
-            # Handle cases where metadata might still be a JSON string from SQLite
             metadata = mem.get("metadata", {})
             if isinstance(metadata, str):
-                try:
-                    import json
-                    metadata = json.loads(metadata)
-                except:
-                    metadata = {}
+                try: metadata = json.loads(metadata)
+                except: metadata = {}
 
             entities = metadata.get("entities", [])
             relations = metadata.get("relations", [])
             
-            # Create a unique key for the truth slot
-            # e.g., ("Galaxy X-55", "primary_emission")
+            slot_key = None
+            if entities and relations:
+                ent_id = entities[0].get("id") if isinstance(entities[0], dict) else entities[0]
+                rel_type = relations[0].get("type") if isinstance(relations[0], dict) else relations[0]
+                slot_key = (str(ent_id).lower(), str(rel_type).lower())
+            
+            if slot_key:
+                slot_groups.setdefault(slot_key, []).append(mem)
+
+        # Implicit Overrides: The newest memory for a slot is the truth
+        slot_truths = {}
+        for slot_key, group in slot_groups.items():
+            slot_truths[slot_key] = max(group, key=lambda x: float(x.get("timestamp", 0.0)))
+
+        resolved_memories = []
+        for mem in ranked_memories:
+            # Unified Clamped Scoring
+            semantic_score = mem.get("unified_score", 0.0)
+            timestamp = float(mem.get("timestamp", 0.0))
+            access_count = float(mem.get("retrieval_count", 0))
+            
+            recency_score = max(0.2, math.exp(-(now - timestamp) / tau))
+            access_freq_norm = min(1.0, access_count / 10.0)
+            
+            if not mem.get("is_hop_result") and not mem.get("is_fallback"):
+                mem["unified_score"] = (semantic_score * 0.6) + (recency_score * 0.3) + (access_freq_norm * 0.1)
+
+            # Slot check
+            metadata = mem.get("metadata", {})
+            if isinstance(metadata, str):
+                try: metadata = json.loads(metadata)
+                except: metadata = {}
+            entities = metadata.get("entities", [])
+            relations = metadata.get("relations", [])
+            
             slot_key = None
             if entities and relations:
                 ent_id = entities[0].get("id") if isinstance(entities[0], dict) else entities[0]
@@ -60,15 +89,18 @@ class TruthEngine:
                 slot_key = (str(ent_id).lower(), str(rel_type).lower())
 
             if slot_key:
-                if slot_key not in seen_slots:
+                if slot_truths[slot_key] == mem:
                     mem["truth_status"] = "verified"
                     resolved_memories.append(mem)
-                    seen_slots.add(slot_key)
                 else:
                     mem["truth_status"] = "superseded"
-                    # We don't discard entirely, but we lower their priority
             else:
-                # Conceptual/General memory with no clear symbolic slot
                 resolved_memories.append(mem)
+
+        # Re-sort by updated unified_score
+        resolved_memories.sort(key=lambda x: (
+            x.get("is_hop_result", False),
+            x.get("unified_score", 0.0)
+        ), reverse=True)
 
         return resolved_memories, "CONSISTENT"

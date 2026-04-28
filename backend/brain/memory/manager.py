@@ -43,8 +43,36 @@ class MemoryManager:
         self.recall_engine.predictive = self.predictive
         self.recall_engine.attention = self.attention
         self.recall_engine.reranker = self.reranker
+        
+        self._hash_cache = {}
+        self._write_timestamps = []
 
-    def store(self, user_id, message, agent_id="default_agent", memory_type="private", skip_llm=False):
+    def store(self, user_id, message, agent_id="default_agent", memory_type="private", skip_llm=False, sync_index=False):
+        import hashlib
+        
+        # Backpressure & Rate Limiting
+        now = time.time()
+        self._write_timestamps = [t for t in self._write_timestamps if now - t < 1.0]
+        if len(self._write_timestamps) > 50:
+            time.sleep(0.1)
+        self._write_timestamps.append(time.time())
+
+        # O(1) Deduplication Fast-Path
+        msg_hash = hashlib.md5(message.encode('utf-8')).hexdigest()
+        user_cache = self._hash_cache.setdefault(user_id, set())
+        if msg_hash in user_cache:
+            return {
+                "importance": 0.0,
+                "schemas": [],
+                "promoted": False,
+                "total_ms": 0.0,
+                "processing_log": [{"system": "python", "stage": "Deduplication", "detail": "Skipped duplicate memory", "duration_ms": 0.0}],
+                "status": "skipped_duplicate"
+            }
+        user_cache.add(msg_hash)
+        if len(user_cache) > 10000:
+            user_cache.clear()
+
         logs = []
         t0 = time.time()
 
@@ -162,6 +190,17 @@ Respond ONLY with a JSON object like: {{
                 log("python", "Forgetfulness", f"Pruned {pruned} low-signal memories.", s)
 
         # ── Final Summary ──
+        if sync_index:
+            import requests
+            for _ in range(10):
+                try:
+                    res = requests.get("http://localhost:8080/status", timeout=1)
+                    if res.status_code == 200 and res.json().get("pending_count", 0) == 0:
+                        break
+                except:
+                    pass
+                time.sleep(0.2)
+
         total_ms = round((time.time() - t0) * 1000, 1)
         return {
             "importance": importance,
@@ -171,8 +210,8 @@ Respond ONLY with a JSON object like: {{
             "processing_log": logs
         }
 
-    def retrieve(self, user_id, query, agent_id="default_agent"):
-        recall_results = self.recall_engine.multi_stage_recall(user_id, query, agent_id=agent_id)
+    def retrieve(self, user_id, query, agent_id="default_agent", limit=5):
+        recall_results = self.recall_engine.multi_stage_recall(user_id, query, agent_id=agent_id, top_k=limit)
         return recall_results
 
     def delete(self, user_id, memory_id, vector_id=None):

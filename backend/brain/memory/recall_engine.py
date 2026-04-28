@@ -111,19 +111,20 @@ class RecallEngine:
                 seen_ids.add(cid)
                 
         for s in semantic_results:
-            if s.get("agent_id") == agent_id or s.get("memory_type") == "shared":
-                sqlite_id = s.get("sqlite_id")
-                if sqlite_id and sqlite_id not in seen_ids:
-                    real_m = self.episodic.get_by_id(user_id, sqlite_id)
-                    if real_m:
-                        real_m["pool"] = "B"
-                        real_m["semantic_score"] = s.get("score", 0.5)
-                        candidates.append(real_m)
-                        seen_ids.add(sqlite_id)
+            sqlite_id = s.get("sqlite_id")
+            if sqlite_id and sqlite_id not in seen_ids:
+                real_m = self.episodic.get_by_id(user_id, sqlite_id)
+                if real_m:
+                    real_m["pool"] = "B"
+                    real_m["semantic_score"] = s.get("score", 0.5)
+                    real_m["memory_type"] = s.get("memory_type", "private")
+                    real_m["agent_id"] = s.get("agent_id", "")
+                    candidates.append(real_m)
+                    seen_ids.add(sqlite_id)
         
         return candidates
 
-    def _rank_candidates(self, query, candidates, query_type):
+    def _rank_candidates(self, query, candidates, query_type, agent_id="default_agent"):
         """Stage 2: Precision-Biased Ranking"""
         context = {
             "query_entities": self._extract_entities_from_query(query),
@@ -165,10 +166,20 @@ class RecallEngine:
                 current_weights["temporal"] = 0.05
                 current_weights["salience"] = 0.40 # High importance boost for long-term knowledge
             
-            # Weighted Fusion
+            # Weighted Fusion with Blended Priority Layering
+            m_type = c.get("memory_type", "private")
+            c_agent = c.get("agent_id", "")
+            layer_bonus = 0.0
+            if m_type == "private" and c_agent == agent_id:
+                layer_bonus = 0.1
+            elif m_type == "shared":
+                layer_bonus = 0.05
+                
             final_score = 0.0
             for sig, weight in current_weights.items():
                 final_score += signals.get(sig, 0.5) * weight
+            
+            final_score += layer_bonus
             
             # Explainability breakdown
             c["unified_score"] = final_score
@@ -207,7 +218,7 @@ class RecallEngine:
         
         # 2. Primary Ranking
         query_type = self._classify_query(expanded_query)
-        ranked = self._rank_candidates(expanded_query, candidates, query_type)
+        ranked = self._rank_candidates(expanded_query, candidates, query_type, agent_id)
         
         # 3. Truth Arbitration (Epistemic Discipline)
         from .truth_engine import TruthEngine
@@ -239,7 +250,7 @@ class RecallEngine:
                 query_context["query_entities"].extend(hop_entities)
                 
                 hop_candidates = self._generate_candidates(user_id, hop_target, agent_id)
-                hop_ranked = self._rank_candidates(hop_target, hop_candidates, "symbolic")
+                hop_ranked = self._rank_candidates(hop_target, hop_candidates, "symbolic", agent_id)
                 # Merge hop results into candidates pool (exclude sources and give high priority)
                 for h in hop_ranked:
                     if h["id"] in source_ids: continue # Skip the fact that triggered the hop
@@ -266,17 +277,46 @@ class RecallEngine:
         # 4. Adaptive Recovery: If Truth Engine squelches symbolic but we have semantic candidates
         if status == "UNCERTAIN" and query_type in ["symbolic", "identity"]:
             print(f"[RecallEngine] Truth Engine rejected symbolic matches. Triggering Semantic Recovery...")
-            ranked_conceptual = self._rank_candidates(expanded_query, candidates, "conceptual")
+            ranked_conceptual = self._rank_candidates(expanded_query, candidates, "conceptual", agent_id)
             resolved, status = truth_engine.resolve(ranked_conceptual, query_context)
         
         # 5. Finalization
         final_memories = resolved[:top_k]
+        
+        fallback_triggered = False
+        decision = "standard_cognitive_retrieval"
+        if not final_memories:
+            print("[RecallEngine] Triggering thresholded vector fallback...")
+            raw_semantic = self.semantic.search(user_id, expanded_query, top_k=top_k*2)
+            for s in raw_semantic:
+                if s.get("score", 0.0) > 0.65:
+                    sqlite_id = s.get("sqlite_id")
+                    if sqlite_id:
+                        real_m = self.episodic.get_by_id(user_id, sqlite_id)
+                        if real_m:
+                            real_m["is_fallback"] = True
+                            real_m["unified_score"] = s.get("score", 0.0)
+                            final_memories.append(real_m)
+                            if len(final_memories) >= top_k:
+                                break
+            if final_memories:
+                fallback_triggered = True
+                decision = "fallback_used_due_to_overfiltering"
+
         self._reinforce_memories(user_id, final_memories)
         
         return {
             "intent": query_type,
             "status": status,
             "memories": final_memories,
+            "debug": {
+                "semantic_hits": candidate_count,
+                "after_filter": len(ranked),
+                "after_truth": len(resolved),
+                "fallback_triggered": fallback_triggered,
+                "top_scores": [round(m.get("unified_score", 0.0), 3) for m in final_memories[:3]],
+                "decision": decision
+            },
             "metrics": {
                 "total_candidates": candidate_count,
                 "latency_ms": round((time.time() - t0) * 1000, 1),

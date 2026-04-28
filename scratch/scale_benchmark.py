@@ -173,5 +173,75 @@ def run_scale_benchmark():
     plt.savefig(plot_path)
     print(f"\n📈 Rigorous benchmark plot saved to {plot_path}")
 
+def run_concurrency_benchmark():
+    from concurrent.futures import ProcessPoolExecutor
+    from backend.api.deps import get_memory_manager
+    import time
+    
+    print("\n" + "="*50)
+    print("🚀 Starting Concurrency & Throughput Benchmark (Direct Calls)")
+    print("="*50)
+    
+    mm = get_memory_manager()
+    user_id = "test_user_concurrent"
+    
+    # 1. Clear existing
+    mm.episodic.cleanup_low_importance_memories(user_id) # pseudo clear
+    requests.post(f"http://localhost:8080/clear")
+    
+    # 2. Store test set
+    num_docs = 100
+    print(f"   📥 Ingesting {num_docs} documents via MemoryManager...")
+    for i in range(num_docs):
+        mm.store(user_id, f"Project Zephyr status update {i}: all systems green.", skip_llm=True, sync_index=False)
+    
+    # Wait for indexing
+    print("   ⏳ Waiting for index sync...")
+    for _ in range(10):
+        try:
+            res = requests.get("http://localhost:8080/status", timeout=1)
+            if res.status_code == 200 and res.json().get("pending_count", 0) == 0:
+                break
+        except: pass
+        time.sleep(0.5)
+
+    # 3. Concurrent Retrieval
+    queries = [f"What is the status of Project Zephyr {i}?" for i in range(200)]
+    
+    def worker_query(q):
+        # We must re-init or use the global mm inside the worker process safely
+        # To avoid SQLite lock issues across processes, we can use threads if SQLite is WAL, 
+        # but the user requested ProcessPoolExecutor for CPU boundedness.
+        # SQLite in read mode is usually fine, but let's instantiate fresh.
+        import os
+        from backend.api.deps import get_memory_manager
+        local_mm = get_memory_manager()
+        start = time.time()
+        local_mm.retrieve(user_id, q, limit=5)
+        return (time.time() - start) * 1000
+
+    print("   🌪️ Firing 200 concurrent queries via ProcessPoolExecutor...")
+    start_time = time.time()
+    latencies = []
+    
+    with ProcessPoolExecutor(max_workers=8) as ex:
+        results = ex.map(worker_query, queries)
+        for lat in results:
+            latencies.append(lat)
+            
+    total_time = time.time() - start_time
+    qps = len(queries) / total_time
+    
+    p50 = np.percentile(latencies, 50)
+    p95 = np.percentile(latencies, 95)
+    
+    print(f"   ✅ Concurrency Benchmark Complete")
+    print(f"      Total Time: {total_time:.2f}s")
+    print(f"      Throughput: {qps:.1f} QPS")
+    print(f"      P50 Latency: {p50:.2f} ms")
+    print(f"      P95 Latency: {p95:.2f} ms")
+    print("="*50 + "\n")
+
 if __name__ == "__main__":
     run_scale_benchmark()
+    run_concurrency_benchmark()
