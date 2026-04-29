@@ -21,13 +21,6 @@ Benchmark scripts reproducible — see `/scratch` directory.
 | API Search (Avg) | ~1-5ms | Includes Python overhead |
 | Index Build (1M) | 92 seconds | Background async |
 
-### 🎯 Recall Accuracy (Hardened Benchmark)
-| Metric | Result | Test |
-|--------|--------|------|
-| Recall@1 | 100% | 300 facts, semantic distractors |
-| Recall@5 | 100% | 300 facts, semantic distractors |
-| MRR | 1.000 | 20 random queries |
-
 ### 📈 Scale vs Recall (Clustered Data)
 | Memory Nodes | Recall@5 | Avg Latency |
 |-------------|----------|-------------|
