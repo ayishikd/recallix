@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Recallix — Persistent Memory Infrastructure for AI",
   description: "The universal memory layer for AI applications. Give agents long-term memory with a single API.",
+  verification: {
+    google: "lJONA5RwyoNhm9tYSB1jo9DVZLqjWgQNbM2E7xva0YY",
+  },
 };
 
 export default function RootLayout({
