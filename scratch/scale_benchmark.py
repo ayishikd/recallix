@@ -10,9 +10,9 @@ VECTOR_DIM = 128
 NUM_QUERIES = 1000 # Massively increased for statistical stability
 WARMUP_RUNS = 100 # To remove cold-start effects
 
-def cpp_search(query, top_k=5):
+def cpp_search(query, top_k=5, ef_search=200):
     start = time.time()
-    payload = {"query": query.tolist(), "top_k": top_k}
+    payload = {"query": query.tolist(), "top_k": top_k, "ef_search": ef_search}
     headers = {"X-Internal-Key": "Recallix-Core-8892"}
     res = requests.post(f"{INFRA_URL}/search_vector", json=payload, headers=headers)
     end = time.time()
@@ -99,16 +99,26 @@ def run_scale_benchmark():
         query_indices = random.sample(range(scale), NUM_QUERIES)
         queries = [raw_vectors[idx] for idx in query_indices]
         
+        # 🚨 FIX 5: Research-Grade efSearch Scaling
+        if scale <= 1000:
+            ef_search = 100
+        elif scale <= 10000:
+            ef_search = 300
+        elif scale <= 100000:
+            ef_search = 800
+        else:
+            ef_search = 1500
+
         # 4. Warmup Phase
         print(f"   🔥 Warming up ({WARMUP_RUNS} runs)...")
         for _ in range(WARMUP_RUNS):
-            cpp_search(queries[0])
+            cpp_search(queries[0], ef_search=ef_search)
             
         # 5. Benchmark C++ (Latency + Percentiles)
         print(f"   🔍 Benchmarking Recallix (1000 queries)...")
         cpp_runs = []
         for q in queries:
-            _, lat = cpp_search(q)
+            _, lat = cpp_search(q, ef_search=ef_search)
             cpp_runs.append(lat)
         
         cpp_avg_latencies.append(np.mean(cpp_runs))
@@ -133,7 +143,7 @@ def run_scale_benchmark():
             py_runs.append(py_lat)
             
             # Get ANN results for the SAME query
-            ann_ids, _ = cpp_search(q)
+            ann_ids, _ = cpp_search(q, ef_search=ef_search)
             
             # Calculate Recall@5
             if ann_ids:

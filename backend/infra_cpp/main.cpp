@@ -131,9 +131,25 @@ int main() {
         }).dump(), "application/json");
     });
 
+    svr.Get("/stats", [&](const httplib::Request &req, httplib::Response &res) {
+        auto s = vEngine.getStats();
+        res.set_content(json({
+            {"total_nodes", s.total_nodes},
+            {"pending_nodes", s.pending_nodes},
+            {"entry_point_id", s.entry_point_id},
+            {"max_layer", s.max_layer},
+            {"M", s.M},
+            {"efConstruction", s.efConstruction},
+            {"efSearch", s.efSearch}
+        }).dump(), "application/json");
+    });
+
     svr.Get("/health", [](const httplib::Request &req, httplib::Response &res) {
         res.set_content("{\"status\":\"healthy\", \"engine\":\"HNSW+NEON\"}", "application/json");
     });
+
+    // Increase payload limit for large bulk ingestions
+    svr.set_payload_max_length(1024LL * 1024 * 1024); // 1GB
 
     std::cout << "✅ Service is running on http://127.0.0.1:8080" << std::endl;
     std::cout << "🔒 Internal Authentication: ENABLED" << std::endl;
