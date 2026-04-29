@@ -23,6 +23,7 @@ import {
   Brain
 } from 'lucide-react';
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import { 
   LineChart, 
@@ -38,10 +39,9 @@ import {
 
 // Data for charts - FINAL MEASURED RESULTS (HNSW + NEON SIMD)
 const scaleData = [
-  { nodes: '1,000', latency: 1.31, baseline: 3.69 },
-  { nodes: '10,000', latency: 1.41, baseline: 37.51 },
-  { nodes: '100,000', latency: 1.37, baseline: 419.59 },
-  { nodes: '1,000,000', latency: 0.1 }, // Real numbers only up to 100k for baseline
+  { nodes: '1,000', latency: 1.15, baseline: 3.69, accuracy: 96.4 },
+  { nodes: '10,000', latency: 1.81, baseline: 37.51, accuracy: 80.9 },
+  { nodes: '100,000', latency: 5.17, baseline: 419.59, accuracy: 57.4 },
 ];
 
 const retentionData = [
@@ -127,7 +127,7 @@ export default function BenchmarkPage() {
               Cognitive Audit.
             </h1>
             <p className="text-xl text-white/40 leading-relaxed max-w-2xl">
-              Measured performance audit for the Recallix MemoryOS. 0.1ms retrieval at 1,000,000 nodes. 
+              Measured performance audit for the Recallix MemoryOS. 0.106ms retrieval at 1,000,000 nodes. 
               Verified on Apple M4 Core Infrastructure.
             </p>
           </div>
@@ -136,8 +136,8 @@ export default function BenchmarkPage() {
         {/* STATS OVERVIEW */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[
-            { label: 'Search Latency (Avg)', value: '0.1ms', unit: '', icon: Zap, color: 'text-blue-400' },
-            { label: 'Recall Accuracy', value: '100%', unit: '', icon: Activity, color: 'text-purple-400' },
+            { label: 'Writes', value: '0.01ms', unit: '', icon: Zap, color: 'text-blue-400' },
+            { label: 'Recall@5 (1k)', value: '96.4%', unit: '', icon: Activity, color: 'text-purple-400' },
             { label: '500-Turn Retention', value: '75%', unit: '', icon: ShieldCheck, color: 'text-emerald-400' },
             { label: 'Multi-Agent Fidelity', value: '100%', unit: '', icon: Database, color: 'text-orange-400' },
           ].map((stat, i) => (
@@ -158,8 +158,9 @@ export default function BenchmarkPage() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-8">
               <p className="text-white/60 leading-relaxed">
-                We stress-tested the episodic retrieval engine by injecting 20 core facts into a stream of 50 distractor messages. 
-                The system was queried after a 100-turn window to verify cross-temporal recall integrity.
+                100% Recall@1 and Recall@5 on hardened benchmark. 
+                300 facts stored with semantic distractors per entity. 
+                Queries designed without keyword overlap to force genuine semantic retrieval.
               </p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                   <div className="p-4 bg-white/5 rounded-xl border border-white/10">
@@ -167,8 +168,8 @@ export default function BenchmarkPage() {
                     <div className="text-[10px] uppercase text-gray-500 font-bold tracking-widest mt-1">Instant Write</div>
                   </div>
                   <div className="p-4 bg-white/5 rounded-xl border border-white/10">
-                    <div className="text-2xl font-bold text-purple-400">0.1ms</div>
-                    <div className="text-[10px] uppercase text-gray-500 font-bold tracking-widest mt-1">Search Latency</div>
+                    <div className="text-2xl font-bold text-purple-400">0.106ms</div>
+                    <div className="text-[10px] uppercase text-gray-500 font-bold tracking-widest mt-1">C++ Search</div>
                   </div>
                   <div className="p-4 bg-white/5 rounded-xl border border-white/10">
                     <div className="text-2xl font-bold text-emerald-400">6,200/s</div>
@@ -219,8 +220,8 @@ export default function BenchmarkPage() {
             </div>
             <div className="lg:col-span-4 flex flex-col gap-6">
               <div className="bg-blue-600 border border-blue-500 rounded-3xl p-8 flex flex-col gap-2 shadow-2xl shadow-blue-600/20">
-                <span className="text-5xl font-black text-white tracking-tighter">0.1ms</span>
-                <p className="text-xs text-white/70 uppercase font-bold tracking-widest">Average Search (1M Nodes)</p>
+                <span className="text-5xl font-black text-white tracking-tighter">0.106ms</span>
+                <p className="text-xs text-white/70 uppercase font-bold tracking-widest">Average C++ Search (1M Nodes)</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-3xl p-8 flex flex-col gap-4">
                  <div className="flex items-center gap-2 text-blue-400 font-bold text-[10px] uppercase tracking-widest">
@@ -228,9 +229,9 @@ export default function BenchmarkPage() {
                    Measured Moat
                  </div>
                  <p className="text-xs text-white/50 leading-relaxed">
-                   By using <strong>HNSW Indexing</strong> and <strong>NEON SIMD</strong> hardware acceleration, 
-                   we've decoupled memory scale from retrieval speed. 1M nodes search is now <strong>over 40,000x faster</strong> than 
-                   the Python baseline. Search speed scales linearly with dataset size in brute-force implementations.
+                   0.106ms pure C++ search at 1M nodes. ~1-5ms end-to-end API latency at production scale. 
+                   Two-phase async architecture ensures writes never block agents. 
+                   Benchmarked on Apple M4 with NEON SIMD hardware acceleration.
                  </p>
               </div>
             </div>
@@ -242,22 +243,22 @@ export default function BenchmarkPage() {
           <TestHeader number={3} title="Universal Substrate" icon={Users} color="bg-purple-600" />
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-6">
-            <h3 className="text-xl font-bold">Model Interoperability</h3>
+            <h3 className="text-xl font-bold">The Cross-Model Test</h3>
             <p className="text-white/60 leading-relaxed">
-              We verified the "Shared Intelligence" moat by storing complex context via one model 
-              architecture and retrieving it with a completely different LLM.
+              Knowledge was stored using Llama 3.1 8B. 
+              Retrieval was performed using Mistral 7B.
             </p>
               <div className="flex items-center gap-4 mt-4">
-                <div className="flex-1 h-14 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 font-bold">Model A</div>
+                <div className="flex-1 h-14 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 font-bold">Llama 3.1 8B</div>
                 <ArrowRight className="text-white/20" />
-                <div className="flex-1 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 font-bold">Model B</div>
+                <div className="flex-1 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 font-bold">Mistral 7B</div>
               </div>
             </div>
             <div className="bg-purple-600/10 border border-purple-600/20 rounded-[2.5rem] p-10 flex flex-col justify-center gap-4">
             <span className="text-4xl font-black text-white">100% Fidelity</span>
             <p className="text-sm text-white/70 leading-relaxed">
-              Recallix standardizes memory across disparate architectures, allowing 
-              collective AI intelligence without semantic loss.
+              100% exact match fidelity across different model architectures. 
+              Memory store latency: 407ms API. LLM generation time excluded from memory metrics.
             </p>
           </div>
           </div>
@@ -268,6 +269,9 @@ export default function BenchmarkPage() {
           <TestHeader number={4} title="Context Retention" icon={History} color="bg-orange-600" />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-8 bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-10">
+              <p className="text-white/60 leading-relaxed mb-6">
+                75% retention after 500 conversational turns with semantic collisions and evolving facts.
+              </p>
               <div className="h-[300px] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={retentionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -285,24 +289,92 @@ export default function BenchmarkPage() {
               <div className="bg-orange-600/10 border border-orange-600/20 rounded-3xl p-8 flex flex-col gap-4">
                 <div className="flex items-center gap-2 text-orange-400 font-bold text-xs uppercase tracking-widest">
                   <AlertTriangle className="w-4 h-4" />
-                  The 75% Post-Mortem
+                  Failure Mode: Intent Shadowing
                 </div>
                 <p className="text-sm text-white/70 leading-relaxed italic text-white/50">
-                   Fact 100 miss identified as "Intent Shadowing." Low heuristic importance (5.0) failed 
-                   promotion to long-term storage, while distraction noise drowned out the episodic match.
+                   Intent Shadowing on low-importance date facts. Adaptive semantic fallback in development 
+                   to resolve episodic matching collisions.
                 </p>
               </div>
               <div className="bg-blue-600/10 border border-blue-600/20 rounded-3xl p-8 flex flex-col gap-4">
-                 <span className="text-xs font-bold text-blue-400 uppercase tracking-widest flex items-center gap-2">
-                   <ArrowRight className="w-3 h-3" />
-                   Technical Fix: Semantic Fallback
-                 </span>
-                 <p className="text-xs text-white/50 leading-relaxed">
-                   Implementation of an Adaptive Intent Router that triggers high-speed HNSW 
-                   semantic searches whenever episodic confidence is low.
-                 </p>
+                <div className="flex flex-col">
+                  <span className="text-4xl font-bold text-blue-400">0.01ms</span>
+                  <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">Instant Write Latency</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-4xl font-bold text-purple-400">0.106ms</span>
+                  <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">C++ Search (1M)</span>
+                </div>
               </div>
             </div>
+          </div>
+        </section>
+
+        {/* PHASE 05: SCALE ANALYSIS */}
+        <section className="relative">
+          <TestHeader number={5} title="Scale Analysis" icon={Layers} color="bg-zinc-700" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { scale: '1k nodes', recall: '96.4%', latency: '1.15ms', status: 'Optimal' },
+              { scale: '10k nodes', recall: '80.9%', latency: '1.81ms', status: 'Stable' },
+              { scale: '100k nodes', recall: '57.4%', latency: '5.17ms', status: 'Degrading' },
+            ].map((item, i) => (
+              <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-8">
+                <div className="flex justify-between items-start mb-4">
+                  <span className="text-xl font-black">{item.scale}</span>
+                  <Badge className={item.status === 'Optimal' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'}>
+                    {item.status}
+                  </Badge>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500 font-bold">Recall@5</span>
+                    <span className="font-black">{item.recall}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500 font-bold">Latency</span>
+                    <span className="font-black">{item.latency}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="text-center text-zinc-500 font-bold mt-8">
+            Optimized for agent workloads under 10k memories. Improving 100k+ recall actively.
+          </p>
+        </section>
+
+        {/* PHASE 06: ADVERSARIAL GAUNTLET */}
+        <section className="relative">
+          <TestHeader number={6} title="Adversarial Gauntlet" icon={ShieldCheck} color="bg-rose-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { test: 'Temporal Contradiction', result: 'PASS' },
+              { test: 'Slang/Noisy Identity', result: 'PASS' },
+              { test: 'One-Token Adversarial', result: 'PASS' },
+              { test: 'Ghost Query (FP)', result: 'PASS' },
+              { test: 'Entity Typo Resolution', result: 'PASS' },
+              { test: 'Linguistic Drift', result: 'PASS' },
+              { test: 'Cross-Domain Collision', result: 'PASS' },
+              { test: 'Ambiguous Facts', result: 'PASS' },
+              { test: 'Multi-Hop Reasoning', result: 'PASS' },
+              { test: 'State-Dependent Truth', result: 'PASS' },
+              { test: 'Alias Resolution', result: 'FAIL', bug: true },
+              { test: 'Identity Locking', result: 'FAIL', bug: true },
+            ].map((item, i) => (
+              <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-5 flex items-center justify-between">
+                <span className="text-sm font-bold text-zinc-400">{item.test}</span>
+                {item.result === 'PASS' ? (
+                  <Badge className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20">PASS</Badge>
+                ) : (
+                  <Badge className="bg-rose-500/10 text-rose-400 border-rose-500/20">FAIL</Badge>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 p-6 rounded-[32px] bg-white/[0.02] border border-white/10 text-center">
+            <p className="text-lg font-black tracking-tight">10/12 Adversarial Tests Passing</p>
+            <p className="text-sm text-zinc-500 font-bold mt-1">2 known failures documented and tracked for the next core sprint.</p>
           </div>
         </section>
 

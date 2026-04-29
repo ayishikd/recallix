@@ -27,6 +27,7 @@ export const memoryApi = {
     worldState: () => api<Record<string, any>>("GET", "/memory/world-state"),
     metaInsights: () => api<any[]>("GET", "/memory/meta-insights"),
     stats: () => api<{ episodic_memories: number; timeline_events: number; reflections: number; schemas: number; active_agents: number }>("GET", "/memory/stats"),
+    systemStats: () => api<{ total_nodes: number; pending_nodes: number; max_layer: number; M: number; efConstruction: number; efSearch: number }>("GET", "/memory/system/stats"),
     profile: () => api<any>("GET", "/memory/profile"),
 };
 

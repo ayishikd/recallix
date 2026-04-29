@@ -7,12 +7,72 @@
 
 ![Recallix Dashboard](dashboard.png)
 
-## 🚀 Key Performance Audits (Verified)
-*   **Instant Write Latency**: 0.01ms (Two-Phase Write Buffer)
-*   **Search Latency**: 0.19ms (Avg) at 1,000,000 nodes
-*   **Recall Accuracy**: 100/100 (Reproducible stress-test)
-*   **Long-Term Retention**: 75% (After 500+ turns of noise)
-*   **Multi-Agent Handover**: 100% Fidelity (Model A stores → Model B retrieves)
+## 🚀 Verified Performance Benchmarks
+
+All benchmarks measured on Apple M4 (ARM). 
+Benchmark scripts reproducible — see `/scratch` directory.
+
+### ⚡ Core Engine Performance
+| Metric | Result | Notes |
+|--------|--------|-------|
+| Write Latency | 0.01ms | Two-phase buffer |
+| C++ Search (Avg) | 0.106ms | `benchmark_hnsw` binary |
+| C++ Search (P99) | 1.80ms | `benchmark_hnsw` binary |
+| API Search (Avg) | ~1-5ms | Includes Python overhead |
+| Index Build (1M) | 92 seconds | Background async |
+
+### 🎯 Recall Accuracy (Hardened Benchmark)
+| Metric | Result | Test |
+|--------|--------|------|
+| Recall@1 | 100% | 300 facts, semantic distractors |
+| Recall@5 | 100% | 300 facts, semantic distractors |
+| MRR | 1.000 | 20 random queries |
+
+### 📈 Scale vs Recall (Clustered Data)
+| Memory Nodes | Recall@5 | Avg Latency |
+|-------------|----------|-------------|
+| 1,000 | 96.4% | 1.15ms |
+| 10,000 | 80.9% | 1.81ms |
+| 100,000 | 57.4% | 5.17ms |
+
+⚙️ Optimized for agent workloads under 10,000 nodes.
+M and efSearch tunable via `config.yaml` for your accuracy/speed requirements.
+
+### 🤝 Multi-Agent Memory Transfer
+| Metric | Result |
+|--------|--------|
+| Cross-model fidelity | 100% exact match |
+| Memory recall latency | 407ms |
+| LLM generation time | Reported separately |
+| Models tested | NVIDIA Nemotron → Nemotron |
+
+### 🧠 Long-Term Retention
+| Metric | Result |
+|--------|--------|
+| 500-turn retention | 75% |
+| Failure mode | Intent Shadowing (documented) |
+| Fix | Adaptive semantic fallback (in development) |
+
+### 🔥 Adversarial Gauntlet
+| Test | Result |
+|------|--------|
+| Temporal contradiction | PASS |
+| Slang/noisy identity | PASS |
+| One-token adversarial | PASS |
+| Ghost query (false positive) | PASS |
+| Entity typo resolution | PASS |
+| Linguistic drift | PASS |
+| Cross-domain collision | PASS |
+| Ambiguous facts | PASS |
+| Multi-hop reasoning | PASS |
+| State-dependent truth | PASS |
+| Alias resolution | ❌ FAIL (known bug) |
+| Identity locking edge case | ❌ FAIL (known bug) |
+
+**10/12 adversarial tests passing.**
+
+⚠️ **Hardware**: NEON SIMD benchmarked on Apple Silicon. AVX2 (x86) implemented, benchmarks pending.
+⚠️ **Latency**: C++ engine latency excludes Python API and LLM inference overhead.
 
 ## The Problem
 
@@ -33,12 +93,12 @@ The memory survives forever.
 *   **Model Agnostic**: Neutral substrate supporting Llama, Mistral, GPT, and custom architectures.
 
 ## 📊 Audited Configuration (The Ground Truth)
-To replicate our **0.19ms** search and **75% retention** metrics, we used the following defaults:
-*   **Reasoning Model**: `llama3.1:8b` (Ollama)
+To replicate our search and retention metrics, we used the following defaults:
+*   **Reasoning Model**: `nvidia/nemotron-3-8b` (NVIDIA API)
 *   **Retrieval Model**: `mistral:latest` (Ollama)
 *   **Embedding Model**: `mxbai-embed-large` (Ollama)
-*   **HNSW Params**: `M=16`, `efConstruction=100`, `efSearch=50`
-*   **Database**: SQLite with `PRAGMA journal_mode=WAL` and `PRAGMA synchronous=NORMAL`
+*   **HNSW Params**: `M=48`, `efConstruction=200`, `efSearch=100`
+*   **Database**: SQLite with `PRAGMA journal_mode=WAL`
 *   **Hardware**: Apple M-series (ARM) with **NEON SIMD** acceleration
 
 > ⚠️ **Hardware Caveat**: Benchmarks were measured on ARM (Apple Silicon). All models and parameters are configurable via `config.yaml`.

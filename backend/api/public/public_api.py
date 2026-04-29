@@ -199,6 +199,21 @@ async def get_stats(auth=Depends(verify_api_key)):
         "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
     }
 
+@router.get("/system/stats")
+async def get_system_stats(auth=Depends(verify_api_key)):
+    try:
+        from backend.utils.internal_client import internal_get
+        res = internal_get("http://localhost:8080/stats")
+        if res.status_code == 200:
+            return {
+                "status": "success",
+                "data": res.json(),
+                "timestamp": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            }
+        return {"status": "error", "message": "Failed to fetch engine stats"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 @router.get("/profile")
 async def get_profile(auth=Depends(verify_api_key)):
     user_id = auth["user_id"]

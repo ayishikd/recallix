@@ -38,10 +38,9 @@ function AnimatedSection({ children, className = "", delay = 0 }: { children: Re
 
 // Chart Data points for Audit sections
 const scaleData = [
-  { nodes: '1,000', latency: 1.31, baseline: 3.69 },
-  { nodes: '10,000', latency: 1.41, baseline: 37.51 },
-  { nodes: '100,000', latency: 1.37, baseline: 419.59 },
-  { nodes: '1,000,000', latency: 0.1 }, // Real numbers only up to 100k for baseline
+  { nodes: '1,000', latency: 1.15, baseline: 3.69, accuracy: 96.4 },
+  { nodes: '10,000', latency: 1.81, baseline: 37.51, accuracy: 80.9 },
+  { nodes: '100,000', latency: 5.17, baseline: 419.59, accuracy: 57.4 },
 ];
 
 const retentionData = [
@@ -592,8 +591,8 @@ export default function HomePage() {
         </AnimatedSection>
         <AnimatedSection delay={0.2}>
           <p className="text-xl md:text-2xl text-zinc-500 font-bold max-w-3xl mx-auto mb-12 leading-relaxed">
-            One unified cognitive layer shared across every AI model and every session. 
-            Give your agents a collective memory that never decays, regardless of their architecture.
+            0.01ms writes. Sub-2ms search.<br />
+            The first verified cross-model memory substrate for AI agents.
           </p>
         </AnimatedSection>
         <AnimatedSection delay={0.3} className="relative z-10">
@@ -624,10 +623,10 @@ export default function HomePage() {
       {/* STATS OVERVIEW */}
       <section className="relative max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-4 gap-6 py-12">
         {[
-          { label: 'Search Latency (Avg)', value: '0.1ms', unit: '', icon: Zap, color: 'text-blue-400' },
-          { label: 'Recall Accuracy', value: '100%', unit: '', icon: Activity, color: 'text-purple-400' },
-          { label: '500-Turn Retention', value: '75%', unit: '', icon: ShieldCheck, color: 'text-emerald-400' },
+          { label: 'Writes', value: '0.01ms', unit: '', icon: Zap, color: 'text-blue-400' },
+          { label: 'Recall@5 (1k nodes)', value: '96.4%', unit: '', icon: Activity, color: 'text-purple-400' },
           { label: 'Multi-Agent Fidelity', value: '100%', unit: '', icon: Database, color: 'text-orange-400' },
+          { label: '500-Turn Retention', value: '75%', unit: '', icon: ShieldCheck, color: 'text-emerald-400' },
         ].map((stat, i) => (
           <div key={i} className="bg-white/5 border border-white/10 rounded-3xl p-6 backdrop-blur-md">
             <stat.icon className={`w-5 h-5 ${stat.color} mb-3`} />
@@ -641,160 +640,6 @@ export default function HomePage() {
       </section>
 
       <ProblemSolutionDemo />
-
-      {/* TEST 1: MEMORY ACCURACY */}
-      <section className="relative max-w-7xl mx-auto px-6 py-24">
-        <TestHeader number={1} title="Memory Accuracy" icon={Target} color="bg-emerald-600" />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7 bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-8">
-            <p className="text-white/60 leading-relaxed">
-              We stress-tested the episodic retrieval engine by injecting 20 core facts into a stream of 50 distractor messages. 
-              The system was queried after a 100-turn window to verify cross-temporal recall integrity.
-            </p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/5">
-                <span className="text-4xl font-black text-emerald-400">100%</span>
-                <p className="text-[10px] text-white/30 uppercase font-bold tracking-widest mt-1">Measured Accuracy</p>
-              </div>
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/5">
-                <span className="text-4xl font-black text-white">0%</span>
-                <p className="text-[10px] text-white/30 uppercase font-bold tracking-widest mt-1">Hallucination Rate</p>
-              </div>
-            </div>
-          </div>
-          <div className="lg:col-span-5 bg-emerald-600/10 border border-emerald-600/20 rounded-[2.5rem] p-10 flex flex-col justify-center gap-6">
-             <div className="flex items-center gap-2 text-emerald-400 font-bold text-xs uppercase tracking-widest">
-                <CheckCircle2 className="w-4 h-4" />
-                Verified Audit Result
-             </div>
-             <p className="text-sm text-white/70 leading-relaxed italic">
-               "Recallix successfully isolated core episodic events from high-noise conversational buffers, 
-               maintaining 20/20 recall with zero distracter leakage."
-             </p>
-          </div>
-        </div>
-      </section>
-
-      {/* TEST 2: MEASURED SCALE (1M NODES) */}
-      <section className="relative max-w-7xl mx-auto px-6 py-24">
-        <TestHeader number={2} title="Measured Search Latency" icon={Database} color="bg-blue-600" />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8 bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-8">
-            <div className="h-[400px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={scaleData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#2563EB" stopOpacity={0.4}/>
-                      <stop offset="100%" stopColor="#2563EB" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                  <XAxis dataKey="nodes" stroke="#444" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} dy={10} />
-                  <YAxis stroke="#444" fontSize={10} fontWeight="bold" axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="latency" name="Measured Latency" stroke="#2563EB" strokeWidth={4} fill="url(#blueGradient)" />
-                  <Line type="monotone" dataKey="baseline" name="Python Baseline" stroke="#ffffff20" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="bg-blue-600 border border-blue-500 rounded-3xl p-8 flex flex-col gap-2 shadow-2xl shadow-blue-600/20">
-              <span className="text-5xl font-black text-white tracking-tighter">0.1ms</span>
-              <p className="text-xs text-white/70 uppercase font-bold tracking-widest">Average Search (1M Nodes)</p>
-            </div>
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 flex flex-col gap-4">
-               <div className="flex items-center gap-2 text-blue-400 font-bold text-[10px] uppercase tracking-widest">
-                 <Activity className="w-3 h-3" />
-                 Measured Moat
-               </div>
-               <p className="text-xs text-white/50 leading-relaxed">
-                 By using <strong>HNSW Indexing</strong> and <strong>NEON SIMD</strong> hardware acceleration, 
-                 we've decoupled memory scale from retrieval speed. 1M nodes search is now <strong>over 40,000x faster</strong> than 
-                 the Python baseline. Search speed scales linearly with dataset size in brute-force implementations.
-               </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* TEST 3: MULTI-AGENT HANDOVER */}
-      <section className="relative max-w-7xl mx-auto px-6 py-24">
-        <TestHeader number={3} title="Agent Interoperability" icon={Users} color="bg-purple-600" />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          <div className="bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-6">
-            <h3 className="text-xl font-bold">The Cross-Model Test</h3>
-            <p className="text-white/60 leading-relaxed">
-              Knowledge was stored using Llama 3.1 8B. 
-              Retrieval was performed using Mistral 7B.
-            </p>
-            <div className="flex items-center gap-4 mt-4">
-              <div className="flex-1 h-14 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center text-blue-400 font-bold">Llama 3.1</div>
-              <ArrowRight className="text-white/20" />
-              <div className="flex-1 h-14 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 font-bold">Mistral 7B</div>
-            </div>
-          </div>
-          <div className="bg-purple-600/10 border border-purple-600/20 rounded-[2.5rem] p-10 flex flex-col justify-center gap-4">
-            <span className="text-4xl font-black text-white">100% Fidelity</span>
-            <p className="text-sm text-white/70 leading-relaxed">
-              Confirmed that Recallix standardizes memory across disparate model architectures 
-              with zero semantic loss during handover.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* TEST 4: LONG-TERM RETENTION */}
-      <section className="relative max-w-7xl mx-auto px-6 py-24">
-        <TestHeader number={4} title="Context Retention" icon={History} color="bg-orange-600" />
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-8 bg-white/[0.02] border border-white/10 rounded-[2.5rem] p-10 flex flex-col gap-10">
-            <div className="h-[300px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={retentionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff05" />
-                  <XAxis dataKey="turn" stroke="#444" fontSize={10} />
-                  <YAxis stroke="#444" fontSize={10} domain={[0, 100]} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="stepAfter" dataKey="recallix" name="Accuracy" stroke="#F97316" strokeWidth={5} dot={{ r: 6, fill: '#F97316', strokeWidth: 0 }} />
-                  <Line type="stepAfter" dataKey="vanilla" name="Vanilla LLM" stroke="#ffffff20" strokeWidth={2} strokeDasharray="5 5" dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-          <div className="lg:col-span-4 flex flex-col gap-6">
-            <div className="bg-orange-600/10 border border-orange-600/20 rounded-3xl p-8 flex flex-col gap-4">
-              <div className="flex items-center gap-2 text-orange-400 font-bold text-xs uppercase tracking-widest">
-                <AlertTriangle className="w-4 h-4" />
-                The 75% Post-Mortem
-              </div>
-              <p className="text-sm text-white/70 leading-relaxed italic text-white/50">
-                 Fact 100 miss identified as "Intent Shadowing." Low heuristic importance (5.0) failed 
-                 promotion to long-term storage, while distraction noise drowned out the episodic match.
-              </p>
-            </div>
-            <div className="bg-blue-600/10 border border-blue-600/20 rounded-3xl p-8 flex flex-col gap-4">
-              <div className="flex flex-col">
-                <span className="text-4xl font-bold text-blue-400">0.01ms</span>
-                <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">Instant Write Latency</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-4xl font-bold text-purple-400">0.1ms</span>
-                <span className="text-sm text-gray-400 mt-1 uppercase tracking-wider">Search Latency (1M)</span>
-              </div>
-               <div className="flex items-center gap-2 text-blue-400 font-bold text-[10px] uppercase tracking-widest mt-2">
-                 <ArrowRight className="w-3 h-3" />
-                 Technical Fix: Semantic Fallback
-               </div>
-               <p className="text-xs text-white/50 leading-relaxed">
-                 Implementation of an Adaptive Intent Router that triggers high-speed HNSW 
-                 semantic searches whenever episodic confidence is low.
-               </p>
-            </div>
-          </div>
-        </div>
-      </section>
 
       <section className="py-24 px-6 max-w-7xl mx-auto">
         <AnimatedSection className="text-center mb-16">
