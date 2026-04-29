@@ -139,3 +139,12 @@ cd backend/infra_cpp/build
 
 ## 📜 License
 Apache-2.0
+
+## 💬 Feedback
+
+If you cloned this and hit issues — please open a 
+GitHub issue or reach out directly.
+
+If it worked — I'd love to know what you're building.
+
+[ayishik2003@gmail.com]
